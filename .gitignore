@@ -1,0 +1,15 @@
+# Obsidian
+.obsidian/
+.trash/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*~
+.*.swp
+
+# Personal
+.private/
