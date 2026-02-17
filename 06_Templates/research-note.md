@@ -4,15 +4,13 @@ Use this template for capturing sources in `03_Research/`.
 
 ---
 
-```yaml
 ---
 type: research
 status: draft
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
-tags: []
+tags: [topic, source-type]
 ---
-```
 
 # [Title of Source]
 

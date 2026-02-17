@@ -4,15 +4,13 @@ Use this template for evaluations in `05_Reviews/`.
 
 ---
 
-```yaml
 ---
 type: review
 status: draft
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
-tags: []
+tags: [evaluation]
 ---
-```
 
 # Review: [Title of Content]
 

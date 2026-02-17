@@ -65,10 +65,16 @@ See `06_Templates/` for starting points.
 ├── 04_Writing/      # Long-form drafts and essays
 ├── 05_Reviews/      # Evaluations and retrospectives
 ├── 06_Templates/    # Note templates
-└── 99_Archive/      # Completed or deprecated content
+└── 99_Archive/      # Completed or deprecated content (move here after publishing)
 ```
 
 Each folder contains a README explaining its purpose.
+
+**Typical workflow:**
+1. Capture ideas in `00_Inbox/` or `01_Daily/`
+2. Refine into atomic notes in `02_Notes/`
+3. Develop long-form writing in `04_Writing/`
+4. Archive finished work in `99_Archive/` (optional)
 
 ---
 
@@ -160,11 +166,13 @@ type: note | research | writing | journal | review
 status: draft | active | revised | finished
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
-tags: []
+tags: [1-3 tags max, only if useful for filtering]
 ---
 ```
 
 Use what's helpful. Ignore the rest.
+
+**Tags:** Optional. Use 1-3 tags maximum, only when filtering would be useful. Prefer descriptive filenames and wiki-links `[[note-name]]` over extensive tagging.
 
 ---
 

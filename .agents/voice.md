@@ -100,6 +100,18 @@ When working with a new author:
 
 If you have specific voice preferences, document them here:
 
+**Example:**
+```
+- Sentence length: Short to medium (10-25 words average)
+- Preferred perspective: First person ("I argue...") or third person ("Markets require...")
+- Formality level: Semi-formal, accessible to intelligent general readers
+- Technical depth: Explain jargon on first use; prefer plain language
+- Tone: Skeptical but constructive; curious rather than certain
+- Words/phrases to avoid: "leverage," "utilize," "synergy," "thought leader"
+- Words/phrases to favor: "use," "tool," "pattern," "practitioner"
+```
+
+Your preferences:
 - Sentence length:
 - Preferred perspective (I, we, one, passive):
 - Formality level:

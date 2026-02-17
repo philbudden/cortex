@@ -4,15 +4,13 @@ Use this template for long-form work in `04_Writing/`.
 
 ---
 
-```yaml
 ---
 type: writing
-status: draft
+status: outline
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
-tags: []
+tags: [essay, topic]
 ---
-```
 
 # [Working Title]
 

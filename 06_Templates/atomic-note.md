@@ -4,15 +4,13 @@ Use this template for evergreen notes in `02_Notes/`.
 
 ---
 
-```yaml
 ---
 type: note
 status: draft
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
-tags: []
+tags: [concept, domain]
 ---
-```
 
 # [Clear Concept Name]
 
@@ -42,3 +40,5 @@ tags: []
 - **Evergreen**: Focus on timeless ideas, not dated references
 
 Front-matter is optional but helpful for filtering and organisation.
+
+**Tags:** Use 1-3 tags maximum, only when filtering would be useful. Prefer descriptive titles and wiki-links over extensive tagging.
