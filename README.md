@@ -93,6 +93,7 @@ Available skills:
 - **`refactoring.md`**: Organising messy content into atomic notes
 - **`voice.md`**: Matching your writing style
 - **`scoring.md`**: Rating ideas or sources with explicit criteria
+- **`content-rubric.md`**: Customizable criteria for evaluating content quality (reference file)
 
 ### How to Use Skills
 
@@ -118,6 +119,20 @@ To create a new skill:
 Skills are **model-agnostic**. Any AI that can read Markdown can use them.
 
 See `.agents/README.md` for details.
+
+### Customizing Content Evaluation
+
+The `.agents/content-rubric.md` file defines criteria for judging what content is worth keeping.
+
+**To customize it:**
+
+1. Open `.agents/content-rubric.md`
+2. Adjust the 5 core dimensions (Clarity, Durability, Reusability, Actionability, Uniqueness)
+3. Add custom criteria in the "Custom Criteria" section
+4. Define domain-specific filters for your areas of interest
+5. Update scoring thresholds to match your curation intensity
+
+The rubric is used by `review.md` and `scoring.md` skills when evaluating content. Customize it to match your interests and standards.
 
 ---
 

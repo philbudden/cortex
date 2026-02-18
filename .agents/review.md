@@ -18,7 +18,7 @@ Also applies when user explicitly asks for review in any folder.
 
 ### Evaluate Against Criteria
 - Use explicit rubrics provided by the user
-- If no rubric exists, ask for evaluation criteria
+- If no rubric exists, refer to `.agents/content-rubric.md` or ask for criteria
 - Never impose unstated standards
 
 ### Surface Strengths and Weaknesses
@@ -61,9 +61,9 @@ Also applies when user explicitly asks for review in any folder.
 
 ## Evaluation Frameworks
 
-### For Ideas (see also: `scoring.md`)
+### For Ideas (see also: `scoring.md`, `content-rubric.md`)
 
-Consider:
+Consider (or use dimensions from `content-rubric.md`):
 - **Clarity**: Is the idea well-defined?
 - **Novelty**: Is this meaningfully different from existing work?
 - **Feasibility**: Can this actually be done?

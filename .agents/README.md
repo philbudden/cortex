@@ -38,6 +38,15 @@ The AI determines which skills apply based on:
 - **`voice.md`** — Principles for matching author voice and tone
 - **`scoring.md`** — Rating and comparing ideas or sources
 
+## Reference Files
+
+In addition to skills, this folder contains:
+
+- **`content-rubric.md`**: Customizable criteria for evaluating content quality
+  - Used by `review.md` and `scoring.md` skills
+  - Defines what makes content worth keeping
+  - Meant to be personalized to your interests
+
 ## Adding Your Own Skills
 
 To create a new skill:

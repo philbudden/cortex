@@ -56,7 +56,7 @@ This skill applies when:
 
 ## Common Rubric Dimensions
 
-*(Examples—use what the author specifies.)*
+*(Examples—use what the author specifies, or refer to `.agents/content-rubric.md` for customized criteria.)*
 
 ### For Ideas
 - **Clarity**: How well-defined is this?
@@ -64,6 +64,8 @@ This skill applies when:
 - **Feasibility**: Can this be done with available resources?
 - **Impact**: If successful, how much does it matter?
 - **Fit**: How well does this align with goals or voice?
+
+See `content-rubric.md` for a complete framework with 5 core dimensions and customization guidance.
 
 ### For Sources
 - **Relevance**: Does it address the question?

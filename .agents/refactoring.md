@@ -32,7 +32,7 @@ This skill applies when:
 ### Suggest Destinations
 - Recommend target folders (`02_Notes/`, `03_Research/`, `04_Writing/`)
 - Propose connections to existing notes
-- Identify content worth archiving vs. developing
+- Identify content worth archiving vs. developing (refer to `content-rubric.md` for quality criteria)
 
 ## Non-Goals
 
