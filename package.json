@@ -2,7 +2,13 @@
   "name": "openclaw",
   "version": "0.1.0",
   "description": "Personal AI assistant platform with Matrix integration and Ollama backend",
-  "keywords": ["ai", "assistant", "matrix", "ollama", "opencode"],
+  "keywords": [
+    "ai",
+    "assistant",
+    "matrix",
+    "ollama",
+    "opencode"
+  ],
   "license": "MIT",
   "author": "",
   "repository": {

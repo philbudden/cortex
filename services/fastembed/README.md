@@ -5,6 +5,7 @@ FastAPI service for embedding and search capabilities.
 ## Phase 0 - Scaffold Only
 
 Currently provides only health check endpoints:
+
 - `GET /` - Root endpoint
 - `GET /health` - Health check
 - `GET /ready` - Readiness check

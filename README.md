@@ -25,6 +25,7 @@ Matrix Client ←→ Cortex Gateway ←→ OpenCode ←→ Ollama (Mac Mini)
 **Phase 0 Goal**: Runnable skeleton with no functionality, passing CI
 
 ### Completed
+
 - ✅ Copied OpenClaw source and removed unused components
 - ✅ Created `opencode-runner` stub (hardcoded responses)
 - ✅ Added Python FastEmbed service scaffold (health endpoint only)
@@ -32,6 +33,7 @@ Matrix Client ←→ Cortex Gateway ←→ OpenCode ←→ Ollama (Mac Mini)
 - ✅ Set up CI (lint, typecheck, unit tests, container build)
 
 ### TODO
+
 - [ ] Verify TypeScript compiles with Matrix extension only
 - [ ] Test `docker compose up` → gateway starts
 - [ ] Verify Matrix connects
@@ -56,6 +58,7 @@ docker compose logs -f
 ## Development
 
 ### Prerequisites
+
 - Node.js 22+
 - pnpm (via corepack)
 - Python 3.12+ (for FastEmbed service)

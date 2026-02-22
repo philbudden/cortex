@@ -16,6 +16,7 @@ two key substitutions:
 2. **Channel adaptor**: Matrix is the primary (and initially only) messaging channel
 
 The platform must:
+
 - Connect to Ollama running on a dedicated Mac Mini for all LLM inference
 - Run agents remotely on a K3S cluster or a Podman host
 - Be fully container-native (Docker, Podman, Kubernetes)
@@ -33,21 +34,21 @@ make architectural choices that prevent future multi-user expansion.
 OpenClaw is a mature TypeScript/Node.js AI gateway with the following
 subsystems:
 
-| Subsystem | OpenClaw implementation | Decision for this platform |
-|---|---|---|
-| Gateway server | WebSocket/HTTP RPC, Node.js | **Reuse** — fork, strip unused channels |
-| Agent runner | Pi embedded runner (Mariozechner SDK) | **Replace** — OpenCode runner |
-| Matrix channel | `extensions/matrix` (`@openclaw/matrix`) | **Reuse as-is** — production-ready |
-| Memory files | SOUL/USER/MEMORY/AGENTS/HEARTBEAT.md | **Reuse** — identical structure |
-| Memory embeddings | OpenAI / Voyage / Gemini | **Replace** — FastEmbed (local Python) |
-| Heartbeat | Cron + `HEARTBEAT.md` + channel delivery | **Reuse** — adapt Matrix as only target |
-| Hooks | Event-driven lifecycle hooks | **Reuse** — keep bundled hooks |
-| Skills registry | Bash/Node SKILL.md + tool generation | **Adapt** — add Python skill executor |
-| Config schema | Zod schema, JSON config file | **Reuse** — slim down unused fields |
-| Deployment | Dockerfile + docker-compose | **Extend** — add Helm chart, Podman quadlets |
-| macOS menubar app | Swift / macOS native | **Drop** — not in scope |
-| Mobile apps | iOS / Android | **Drop** — Matrix is the mobile interface |
-| 38 other channel extensions | Slack, Discord, Telegram, etc. | **Drop** — matrix only initially |
+| Subsystem                   | OpenClaw implementation                  | Decision for this platform                   |
+| --------------------------- | ---------------------------------------- | -------------------------------------------- |
+| Gateway server              | WebSocket/HTTP RPC, Node.js              | **Reuse** — fork, strip unused channels      |
+| Agent runner                | Pi embedded runner (Mariozechner SDK)    | **Replace** — OpenCode runner                |
+| Matrix channel              | `extensions/matrix` (`@openclaw/matrix`) | **Reuse as-is** — production-ready           |
+| Memory files                | SOUL/USER/MEMORY/AGENTS/HEARTBEAT.md     | **Reuse** — identical structure              |
+| Memory embeddings           | OpenAI / Voyage / Gemini                 | **Replace** — FastEmbed (local Python)       |
+| Heartbeat                   | Cron + `HEARTBEAT.md` + channel delivery | **Reuse** — adapt Matrix as only target      |
+| Hooks                       | Event-driven lifecycle hooks             | **Reuse** — keep bundled hooks               |
+| Skills registry             | Bash/Node SKILL.md + tool generation     | **Adapt** — add Python skill executor        |
+| Config schema               | Zod schema, JSON config file             | **Reuse** — slim down unused fields          |
+| Deployment                  | Dockerfile + docker-compose              | **Extend** — add Helm chart, Podman quadlets |
+| macOS menubar app           | Swift / macOS native                     | **Drop** — not in scope                      |
+| Mobile apps                 | iOS / Android                            | **Drop** — Matrix is the mobile interface    |
+| 38 other channel extensions | Slack, Discord, Telegram, etc.           | **Drop** — matrix only initially             |
 
 ### Reuse boundary summary
 
@@ -189,6 +190,7 @@ regardless of which mode is used.
 delivers responses
 
 **Changes from OpenClaw**:
+
 - Remove all channel adapters except Matrix and Terminal (OpenCode CLI)
 - Remove Pi embedded runner; add OpenCode Runner Adapter
 - Remove mobile app node tracking (iOS/Android)
@@ -231,16 +233,16 @@ src/
 export interface OpencodeRunnerConfig {
   mode: "server" | "ephemeral";
   // Mode A
-  serverUrl?: string;           // e.g. http://opencode-server:4096
+  serverUrl?: string; // e.g. http://opencode-server:4096
   // Mode B
   containerRuntime?: "k3s" | "podman" | "docker";
   k3sNamespace?: string;
-  podmanSocket?: string;        // unix:///run/user/1000/podman/podman.sock
-  agentImage?: string;          // image with opencode + Python SDK
+  podmanSocket?: string; // unix:///run/user/1000/podman/podman.sock
+  agentImage?: string; // image with opencode + Python SDK
   // Shared
-  ollamaBaseUrl: string;        // http://mac-mini:11434
-  defaultModel: string;         // e.g. qwen2.5-coder:7b
-  sessionStorePath: string;     // path to serialised session store
+  ollamaBaseUrl: string; // http://mac-mini:11434
+  defaultModel: string; // e.g. qwen2.5-coder:7b
+  sessionStorePath: string; // path to serialised session store
   resourceLimits?: {
     cpu?: string;
     memory?: string;
@@ -249,9 +251,9 @@ export interface OpencodeRunnerConfig {
 }
 
 export async function runOpencodeAgent(
-  ctx: AgentRunContext,         // message, session, memory, skills, hooks
+  ctx: AgentRunContext, // message, session, memory, skills, hooks
   config: OpencodeRunnerConfig,
-): Promise<AgentRunResult>;     // text reply, tool calls, usage
+): Promise<AgentRunResult>; // text reply, tool calls, usage
 ```
 
 **Session state**: Because ephemeral containers cannot maintain in-memory
@@ -319,6 +321,7 @@ results, merged and re-ranked by reciprocal rank fusion (RRF).
 **Source**: `openclaw/extensions/matrix/` — **reused with zero modification**
 
 The `@openclaw/matrix` extension is production-ready:
+
 - E2EE support (opt-in, `encryption: true`)
 - Thread-per-conversation mapping (use `threadReplies: "always"`)
 - Per-room config with tool policies
@@ -361,6 +364,7 @@ DMs map to `sessionId = hash(roomId + userId)` for 1:1 continuity.
 ```
 
 **Search modes** (via FastEmbed service):
+
 - `vector`: semantic similarity search across all chunked memory files
 - `keyword`: BM25 full-text search (FTS5) for exact terms, names, dates
 - `hybrid`: both, merged via RRF — default for agent memory recall
@@ -374,12 +378,14 @@ memories to `daily/YYYY-MM-DD.md` before compaction.
 **Source**: `openclaw/src/cron/` — **reused with adaptation**
 
 **Changes**:
+
 - Delivery target hardcoded to Matrix (remove multi-channel dispatch)
 - Target room configurable: `heartbeat.matrixRoomId`
 - HEARTBEAT.md-driven checks — identical to OpenClaw behaviour
 - Active hours window support via `heartbeat.activeHours`
 
 **Behaviour**:
+
 1. Cron fires at configured interval (default: `*/30 * * * *`)
 2. Ephemeral agent turn (Mode B preferred for isolation)
 3. Agent reads `HEARTBEAT.md`, performs checks, reports to Matrix
@@ -391,13 +397,16 @@ memories to `daily/YYYY-MM-DD.md` before compaction.
 # Heartbeat Tasks
 
 ## Every run
+
 - Check Ollama is reachable at http://mac-mini:11434
 - Report any models that have changed or gone missing
 
 ## Daily at 08:00
+
 - Summarise anything notable from yesterday's daily log
 
 ## Weekly on Monday
+
 - Review open tasks from MEMORY.md and flag stale items
 ```
 
@@ -437,6 +446,7 @@ print(get_weather("London"))
 ```
 
 **Python skills runner** (`src/agents/skills/python-runner.ts`):
+
 - Discovers `skill.py` alongside `SKILL.md`
 - Generates an OpenCode tool definition wrapping the Python function
 - Executes skill in a subprocess with a 30s timeout
@@ -444,14 +454,14 @@ print(get_weather("London"))
 
 **Bundled skills to include** (keep relevant OpenClaw skills, adapt to Python):
 
-| Skill | Purpose | Keep? |
-|---|---|---|
-| `weather` | wttr.in weather query | Yes — port to Python |
-| `github` | GitHub API operations | Yes — port to Python |
-| `healthcheck` | Service availability checks | Yes — essential for heartbeat |
-| `summarize` | Document summarisation | Yes — keep |
-| `coding-agent` | Spawn sub-agent for code tasks | Yes — adapt for OpenCode |
-| `obsidian` | Read/write Obsidian vault | Yes — relevant to mobile workflow |
+| Skill          | Purpose                        | Keep?                             |
+| -------------- | ------------------------------ | --------------------------------- |
+| `weather`      | wttr.in weather query          | Yes — port to Python              |
+| `github`       | GitHub API operations          | Yes — port to Python              |
+| `healthcheck`  | Service availability checks    | Yes — essential for heartbeat     |
+| `summarize`    | Document summarisation         | Yes — keep                        |
+| `coding-agent` | Spawn sub-agent for code tasks | Yes — adapt for OpenCode          |
+| `obsidian`     | Read/write Obsidian vault      | Yes — relevant to mobile workflow |
 
 ---
 
@@ -517,11 +527,11 @@ print(get_weather("London"))
 
 ### 6.1 Container Images
 
-| Image | Base | Contents | Tag |
-|---|---|---|---|
-| `agentic-gateway` | `node:22-bookworm-slim` | TypeScript gateway + Matrix extension | `latest` |
-| `agentic-fastembed` | `python:3.12-slim` | FastEmbed service + SQLite | `latest` |
-| `agentic-agent` | `python:3.12-slim` + opencode binary | OpenCode + Python SDK + bundled skills | `latest` |
+| Image               | Base                                 | Contents                               | Tag      |
+| ------------------- | ------------------------------------ | -------------------------------------- | -------- |
+| `agentic-gateway`   | `node:22-bookworm-slim`              | TypeScript gateway + Matrix extension  | `latest` |
+| `agentic-fastembed` | `python:3.12-slim`                   | FastEmbed service + SQLite             | `latest` |
+| `agentic-agent`     | `python:3.12-slim` + opencode binary | OpenCode + Python SDK + bundled skills | `latest` |
 
 All images published to a private container registry (Gitea, GHCR, or
 internal). Images are the installation artefact — no git clone required.
@@ -570,11 +580,11 @@ services:
     image: ${REGISTRY}/agentic-gateway:${TAG:-latest}
     restart: unless-stopped
     ports:
-      - "127.0.0.1:18789:18789"   # Tailscale-exposed, not public
+      - "127.0.0.1:18789:18789" # Tailscale-exposed, not public
     volumes:
       - ${AGENTIC_CONFIG_DIR:-~/.agentic}:/home/node/.agentic
       - ${AGENTIC_WORKSPACE_DIR:-~/.agentic/workspace}:/home/node/.agentic/workspace
-      - /run/podman/podman.sock:/run/podman/podman.sock:ro  # for Mode B
+      - /run/podman/podman.sock:/run/podman/podman.sock:ro # for Mode B
     environment:
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://mac-mini:11434}
       - OPENCODE_RUNNER_MODE=${OPENCODE_RUNNER_MODE:-server}
@@ -606,10 +616,10 @@ services:
     command: ["opencode", "serve", "--port", "4096"]
     environment:
       - OPENAI_BASE_URL=${OLLAMA_BASE_URL:-http://mac-mini:11434}/v1
-      - OPENAI_API_KEY=ollama      # Ollama doesn't validate keys
+      - OPENAI_API_KEY=ollama # Ollama doesn't validate keys
       - OPENCODE_DEFAULT_MODEL=${OPENCODE_DEFAULT_MODEL:-qwen2.5-coder:7b}
     profiles:
-      - mode-a      # Only started when using Mode A
+      - mode-a # Only started when using Mode A
 
 volumes:
   embeddings-db:
@@ -649,16 +659,16 @@ deploy/helm/agentic-platform/
 gateway:
   image: registry/agentic-gateway
   tag: latest
-  replicaCount: 1           # StatefulSet for persistent workspace
+  replicaCount: 1 # StatefulSet for persistent workspace
   workspace:
     storageClass: local-path
     size: 5Gi
 
 opencode:
   runner:
-    mode: server            # "server" | "ephemeral"
+    mode: server # "server" | "ephemeral"
   server:
-    enabled: true           # only if mode=server
+    enabled: true # only if mode=server
     image: registry/agentic-agent
 
 ollama:
@@ -668,7 +678,7 @@ ollama:
 matrix:
   homeserver: https://matrix.example.com
   userId: "@bot:example.com"
-  encryption: false         # enable after initial testing
+  encryption: false # enable after initial testing
   threadReplies: always
 
 heartbeat:
@@ -826,7 +836,7 @@ agentic-platform/
 **Goal**: Runnable skeleton with no functionality, passing CI
 
 - [ ] Fork OpenClaw into new repository; remove all unused channel extensions,
-  mobile apps, macOS app, Pi runner
+      mobile apps, macOS app, Pi runner
 - [ ] Verify remaining TypeScript compiles with Matrix extension only
 - [ ] Stub `opencode-runner/index.ts` returning a hardcoded response
 - [ ] Add Python FastEmbed service scaffold (health endpoint only)
@@ -924,18 +934,18 @@ from images already pulled; same for Podman host
 
 ## 9. Key Risks & Unknowns
 
-| Risk | Severity | Mitigation |
-|---|---|---|
-| **OpenCode server API stability** — opencode is actively developed; HTTP API may change between versions | High | Pin opencode version in Dockerfile; wrap all API calls in a versioned adapter layer; add integration tests |
-| **OpenCode session isolation (Mode A)** — shared server may leak context between sessions if not properly isolated | High | Audit OpenCode session API for isolation guarantees; if insufficient, default to Mode B for all cases |
-| **Ollama network latency** — Mac Mini is on same LAN/Tailscale; round-trips for large context are slow | Medium | Use Tailscale for sub-10ms LAN paths; configure Ollama context window and batch size for throughput; test with realistic workloads |
-| **FastEmbed model quality** — bge-small-en-v1.5 is CPU-fast but lower quality than OpenAI embeddings for long-form recall | Medium | Evaluate on real memory workloads; consider bge-base if quality insufficient; hybrid search (FTS5) compensates for semantic misses |
-| **OpenClaw fork divergence** — upstream openclaw may fix bugs or add features we need | Low | Keep Matrix extension as vendored copy; track upstream releases; document what was changed vs original |
-| **Matrix thread mapping correctness** — wrong sessionId → conversation cross-contamination | High | Unit-test thread root ID resolution; add sessionId to every log line; expose session debug info via heartbeat skill |
-| **Mode B cold start latency** — container pull + start may take 2-10s per interactive message | Medium | Pre-pull images on host; use Mode A for interactive, Mode B for background only; cache agent image locally |
-| **K3S RBAC for job spawning** — gateway needs permission to create Jobs | Low | Define minimal Role in Helm chart; document required permissions |
-| **Python skill subprocess escaping** — untrusted input in skill args could be dangerous | Medium | Always pass args as JSON via stdin, not shell arguments; skills run as non-root; add sandbox mode for untrusted skills |
-| **Encryption key management for Matrix E2EE** — crypto store tied to device identity | Medium | Store crypto DB on persistent volume; document key backup procedure; start with `encryption: false` and enable deliberately |
+| Risk                                                                                                                      | Severity | Mitigation                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **OpenCode server API stability** — opencode is actively developed; HTTP API may change between versions                  | High     | Pin opencode version in Dockerfile; wrap all API calls in a versioned adapter layer; add integration tests                         |
+| **OpenCode session isolation (Mode A)** — shared server may leak context between sessions if not properly isolated        | High     | Audit OpenCode session API for isolation guarantees; if insufficient, default to Mode B for all cases                              |
+| **Ollama network latency** — Mac Mini is on same LAN/Tailscale; round-trips for large context are slow                    | Medium   | Use Tailscale for sub-10ms LAN paths; configure Ollama context window and batch size for throughput; test with realistic workloads |
+| **FastEmbed model quality** — bge-small-en-v1.5 is CPU-fast but lower quality than OpenAI embeddings for long-form recall | Medium   | Evaluate on real memory workloads; consider bge-base if quality insufficient; hybrid search (FTS5) compensates for semantic misses |
+| **OpenClaw fork divergence** — upstream openclaw may fix bugs or add features we need                                     | Low      | Keep Matrix extension as vendored copy; track upstream releases; document what was changed vs original                             |
+| **Matrix thread mapping correctness** — wrong sessionId → conversation cross-contamination                                | High     | Unit-test thread root ID resolution; add sessionId to every log line; expose session debug info via heartbeat skill                |
+| **Mode B cold start latency** — container pull + start may take 2-10s per interactive message                             | Medium   | Pre-pull images on host; use Mode A for interactive, Mode B for background only; cache agent image locally                         |
+| **K3S RBAC for job spawning** — gateway needs permission to create Jobs                                                   | Low      | Define minimal Role in Helm chart; document required permissions                                                                   |
+| **Python skill subprocess escaping** — untrusted input in skill args could be dangerous                                   | Medium   | Always pass args as JSON via stdin, not shell arguments; skills run as non-root; add sandbox mode for untrusted skills             |
+| **Encryption key management for Matrix E2EE** — crypto store tied to device identity                                      | Medium   | Store crypto DB on persistent volume; document key backup procedure; start with `encryption: false` and enable deliberately        |
 
 ---
 
@@ -958,17 +968,17 @@ without explicit re-scoping:
 
 ## 11. Naming Conventions
 
-| Concept | Convention |
-|---|---|
-| Config directory | `~/.agentic/` |
-| Workspace directory | `~/.agentic/workspace/` |
-| Session store | `~/.agentic/workspace/agents/<sessionId>/` |
-| Session ID format | `sha256(roomId + ":" + threadRootId)[0:16]` |
-| Container network | `agentic` |
-| Helm release name | `agentic-platform` |
-| Kubernetes namespace | `agentic-platform` |
-| Image prefix | `registry/agentic-` |
-| Env var prefix | `AGENTIC_` |
+| Concept              | Convention                                  |
+| -------------------- | ------------------------------------------- |
+| Config directory     | `~/.agentic/`                               |
+| Workspace directory  | `~/.agentic/workspace/`                     |
+| Session store        | `~/.agentic/workspace/agents/<sessionId>/`  |
+| Session ID format    | `sha256(roomId + ":" + threadRootId)[0:16]` |
+| Container network    | `agentic`                                   |
+| Helm release name    | `agentic-platform`                          |
+| Kubernetes namespace | `agentic-platform`                          |
+| Image prefix         | `registry/agentic-`                         |
+| Env var prefix       | `AGENTIC_`                                  |
 
 ---
 
@@ -990,4 +1000,4 @@ re-introduce them unless explicitly planned:
 
 ---
 
-*End of PLAN.md*
+_End of PLAN.md_

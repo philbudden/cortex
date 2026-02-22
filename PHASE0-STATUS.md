@@ -59,6 +59,7 @@
 To complete Phase 0, the following must be verified:
 
 1. **Build Verification**
+
    ```bash
    pnpm install
    pnpm build
@@ -66,6 +67,7 @@ To complete Phase 0, the following must be verified:
    ```
 
 2. **Docker Compose Test**
+
    ```bash
    docker compose build
    docker compose up -d
