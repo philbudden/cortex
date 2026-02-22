@@ -100,121 +100,124 @@ describe("skills-install fallback edge cases", () => {
   it.runIf(typeof process.getuid === "function" && process.getuid() !== 0)(
     "apt-get available but sudo missing/unusable returns helpful error for go install",
     async () => {
-    // go not available, brew not available, apt-get + sudo are available, sudo check fails
-    hasBinaryMock.mockImplementation((bin: string) => {
-      if (bin === "go") {
+      // go not available, brew not available, apt-get + sudo are available, sudo check fails
+      hasBinaryMock.mockImplementation((bin: string) => {
+        if (bin === "go") {
+          return false;
+        }
+        if (bin === "brew") {
+          return false;
+        }
+        if (bin === "apt-get" || bin === "sudo") {
+          return true;
+        }
         return false;
-      }
-      if (bin === "brew") {
-        return false;
-      }
-      if (bin === "apt-get" || bin === "sudo") {
-        return true;
-      }
-      return false;
-    });
+      });
 
-    // sudo -n true fails (no passwordless sudo)
-    runCommandWithTimeoutMock.mockResolvedValueOnce({
-      code: 1,
-      stdout: "",
-      stderr: "sudo: a password is required",
-    });
+      // sudo -n true fails (no passwordless sudo)
+      runCommandWithTimeoutMock.mockResolvedValueOnce({
+        code: 1,
+        stdout: "",
+        stderr: "sudo: a password is required",
+      });
 
-    const result = await installSkill({
-      workspaceDir,
-      skillName: "go-tool-single",
-      installId: "deps",
-    });
+      const result = await installSkill({
+        workspaceDir,
+        skillName: "go-tool-single",
+        installId: "deps",
+      });
 
-    expect(result.ok).toBe(false);
-    expect(result.message).toContain("sudo");
-    expect(result.message).toContain("https://go.dev/doc/install");
+      expect(result.ok).toBe(false);
+      expect(result.message).toContain("sudo");
+      expect(result.message).toContain("https://go.dev/doc/install");
 
-    // Verify sudo -n true was called
-    expect(runCommandWithTimeoutMock).toHaveBeenCalledWith(
-      ["sudo", "-n", "true"],
-      expect.objectContaining({ timeoutMs: 5_000 }),
-    );
+      // Verify sudo -n true was called
+      expect(runCommandWithTimeoutMock).toHaveBeenCalledWith(
+        ["sudo", "-n", "true"],
+        expect.objectContaining({ timeoutMs: 5_000 }),
+      );
 
-    // Verify apt-get install was NOT called
-    const aptCalls = runCommandWithTimeoutMock.mock.calls.filter(
-      (call) => Array.isArray(call[0]) && (call[0] as string[]).includes("apt-get"),
-    );
-    expect(aptCalls).toHaveLength(0);
-  });
+      // Verify apt-get install was NOT called
+      const aptCalls = runCommandWithTimeoutMock.mock.calls.filter(
+        (call) => Array.isArray(call[0]) && (call[0] as string[]).includes("apt-get"),
+      );
+      expect(aptCalls).toHaveLength(0);
+    },
+  );
 
   it.runIf(typeof process.getuid === "function" && process.getuid() !== 0)(
     "status-selected go installer fails gracefully when apt fallback needs sudo",
     async () => {
-    // no go/brew, but apt and sudo are present
-    hasBinaryMock.mockImplementation((bin: string) => {
-      if (bin === "go" || bin === "brew") {
+      // no go/brew, but apt and sudo are present
+      hasBinaryMock.mockImplementation((bin: string) => {
+        if (bin === "go" || bin === "brew") {
+          return false;
+        }
+        if (bin === "apt-get" || bin === "sudo") {
+          return true;
+        }
         return false;
-      }
-      if (bin === "apt-get" || bin === "sudo") {
-        return true;
-      }
-      return false;
-    });
+      });
 
-    runCommandWithTimeoutMock.mockResolvedValueOnce({
-      code: 1,
-      stdout: "",
-      stderr: "sudo: a password is required",
-    });
+      runCommandWithTimeoutMock.mockResolvedValueOnce({
+        code: 1,
+        stdout: "",
+        stderr: "sudo: a password is required",
+      });
 
-    const status = buildWorkspaceSkillStatus(workspaceDir);
-    const skill = status.skills.find((entry) => entry.name === "go-tool-multi");
-    expect(skill?.install[0]?.id).toBe("go");
+      const status = buildWorkspaceSkillStatus(workspaceDir);
+      const skill = status.skills.find((entry) => entry.name === "go-tool-multi");
+      expect(skill?.install[0]?.id).toBe("go");
 
-    const result = await installSkill({
-      workspaceDir,
-      skillName: "go-tool-multi",
-      installId: skill?.install[0]?.id ?? "",
-    });
+      const result = await installSkill({
+        workspaceDir,
+        skillName: "go-tool-multi",
+        installId: skill?.install[0]?.id ?? "",
+      });
 
-    expect(result.ok).toBe(false);
-    expect(result.message).toContain("sudo is not usable");
-  });
+      expect(result.ok).toBe(false);
+      expect(result.message).toContain("sudo is not usable");
+    },
+  );
 
   it.runIf(typeof process.getuid === "function" && process.getuid() !== 0)(
     "handles sudo probe spawn failures without throwing",
     async () => {
-    // go not available, brew not available, apt-get + sudo appear available
-    hasBinaryMock.mockImplementation((bin: string) => {
-      if (bin === "go") {
+      // go not available, brew not available, apt-get + sudo appear available
+      hasBinaryMock.mockImplementation((bin: string) => {
+        if (bin === "go") {
+          return false;
+        }
+        if (bin === "brew") {
+          return false;
+        }
+        if (bin === "apt-get" || bin === "sudo") {
+          return true;
+        }
         return false;
-      }
-      if (bin === "brew") {
-        return false;
-      }
-      if (bin === "apt-get" || bin === "sudo") {
-        return true;
-      }
-      return false;
-    });
+      });
 
-    runCommandWithTimeoutMock.mockRejectedValueOnce(
-      new Error('Executable not found in $PATH: "sudo"'),
-    );
+      runCommandWithTimeoutMock.mockRejectedValueOnce(
+        new Error('Executable not found in $PATH: "sudo"'),
+      );
 
-    const result = await installSkill({
-      workspaceDir,
-      skillName: "go-tool-single",
-      installId: "deps",
-    });
+      const result = await installSkill({
+        workspaceDir,
+        skillName: "go-tool-single",
+        installId: "deps",
+      });
 
-    expect(result.ok).toBe(false);
-    expect(result.message).toContain("sudo is not usable");
-    expect(result.stderr).toContain("Executable not found");
+      expect(result.ok).toBe(false);
+      expect(result.message).toContain("sudo is not usable");
+      expect(result.stderr).toContain("Executable not found");
 
-    // Verify apt-get install was NOT called
-    const aptCalls = runCommandWithTimeoutMock.mock.calls.filter(
-      (call) => Array.isArray(call[0]) && (call[0] as string[]).includes("apt-get"),
-    );
-    expect(aptCalls).toHaveLength(0);
-  });
+      // Verify apt-get install was NOT called
+      const aptCalls = runCommandWithTimeoutMock.mock.calls.filter(
+        (call) => Array.isArray(call[0]) && (call[0] as string[]).includes("apt-get"),
+      );
+      expect(aptCalls).toHaveLength(0);
+    },
+  );
 
   it("uv not installed and no brew returns helpful error without curl auto-install", async () => {
     // uv not available, brew not available, curl IS available

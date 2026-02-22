@@ -217,26 +217,25 @@ describe("discoverOpenClawPlugins", () => {
     );
   });
 
-  it.runIf(process.platform !== "win32" && typeof process.getuid === "function" && process.getuid() !== 0)(
-    "blocks suspicious ownership when uid mismatch is detected",
-    async () => {
-      const stateDir = makeTempDir();
-      const globalExt = path.join(stateDir, "extensions");
-      fs.mkdirSync(globalExt, { recursive: true });
-      fs.writeFileSync(
-        path.join(globalExt, "owner-mismatch.ts"),
-        "export default function () {}",
-        "utf-8",
-      );
+  it.runIf(
+    process.platform !== "win32" && typeof process.getuid === "function" && process.getuid() !== 0,
+  )("blocks suspicious ownership when uid mismatch is detected", async () => {
+    const stateDir = makeTempDir();
+    const globalExt = path.join(stateDir, "extensions");
+    fs.mkdirSync(globalExt, { recursive: true });
+    fs.writeFileSync(
+      path.join(globalExt, "owner-mismatch.ts"),
+      "export default function () {}",
+      "utf-8",
+    );
 
-      const actualUid = (process as NodeJS.Process & { getuid: () => number }).getuid();
-      const result = await withStateDir(stateDir, async () => {
-        return discoverOpenClawPlugins({ ownershipUid: actualUid + 1 });
-      });
-      expect(result.candidates).toHaveLength(0);
-      expect(result.diagnostics.some((diag) => diag.message.includes("suspicious ownership"))).toBe(
-        true,
-      );
-    },
-  );
+    const actualUid = (process as NodeJS.Process & { getuid: () => number }).getuid();
+    const result = await withStateDir(stateDir, async () => {
+      return discoverOpenClawPlugins({ ownershipUid: actualUid + 1 });
+    });
+    expect(result.candidates).toHaveLength(0);
+    expect(result.diagnostics.some((diag) => diag.message.includes("suspicious ownership"))).toBe(
+      true,
+    );
+  });
 });
