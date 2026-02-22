@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim
+FROM node:22-bookworm-slim@sha256:3cfe526ec8dd62013b8843e8e5d4877e297b886e5aace4a59fec25dc20736e45
 
 RUN corepack enable
 
@@ -13,6 +13,15 @@ COPY --chown=node:node scripts ./scripts
 # Install dependencies
 USER node
 RUN pnpm install --frozen-lockfile
+
+# Optional: install browser dependencies for Playwright support
+ARG OPENCLAW_INSTALL_BROWSER=false
+USER root
+RUN if [ "$OPENCLAW_INSTALL_BROWSER" = "true" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends xvfb && rm -rf /var/lib/apt/lists/* && \
+      node /app/node_modules/playwright-core/cli.js install --with-deps chromium; \
+    fi
+USER node
 
 # Copy source code
 COPY --chown=node:node . .

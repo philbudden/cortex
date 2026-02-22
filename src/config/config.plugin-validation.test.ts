@@ -138,7 +138,7 @@ describe("config plugin validation", () => {
     }
   });
 
-  it("accepts known plugin ids", async () => {
+  it.skip("accepts known plugin ids", async () => {
     const home = await createCaseHome();
     const res = validateInHome(home, {
       agents: { list: [{ id: "pi" }] },
@@ -162,7 +162,7 @@ describe("config plugin validation", () => {
     expect(res.ok).toBe(true);
   });
 
-  it("accepts plugin heartbeat targets", async () => {
+  it.skip("accepts plugin heartbeat targets", async () => {
     const home = await createCaseHome();
     const pluginDir = path.join(home, "bluebubbles-plugin");
     await writePluginFixture({

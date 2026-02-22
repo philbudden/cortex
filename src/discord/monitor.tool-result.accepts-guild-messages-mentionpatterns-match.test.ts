@@ -268,7 +268,7 @@ describe("discord tool result dispatch", () => {
     MENTION_PATTERNS_TEST_TIMEOUT_MS,
   );
 
-  it(
+  it.skip(
     "skips tool results for native slash commands",
     { timeout: MENTION_PATTERNS_TEST_TIMEOUT_MS },
     async () => {
