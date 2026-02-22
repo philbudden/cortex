@@ -81,6 +81,9 @@ apps/ios/*.mobileprovision
 docs/.local/
 IDENTITY.md
 USER.md
+# Template files in docs/reference/templates/ are part of the repo
+!docs/reference/templates/IDENTITY.md
+!docs/reference/templates/USER.md
 .tgz
 .idea
 
