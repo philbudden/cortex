@@ -8,8 +8,10 @@
       "version": "22"
     },
     // Phase 0 exit criteria: "docker compose up → gateway starts"
+    // moby:false required — python:3.12 is Debian trixie which dropped moby-cli packages
     "ghcr.io/devcontainers/features/docker-in-docker:2": {
       "version": "latest",
+      "moby": false,
       "dockerDashComposeVersion": "v2"
     },
     // Pre-existing; not required by Phase 0 — left unchanged
