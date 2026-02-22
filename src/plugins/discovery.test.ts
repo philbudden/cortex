@@ -217,7 +217,7 @@ describe("discoverOpenClawPlugins", () => {
     );
   });
 
-  it.runIf(process.platform !== "win32" && typeof process.getuid === "function")(
+  it.runIf(process.platform !== "win32" && typeof process.getuid === "function" && process.getuid() !== 0)(
     "blocks suspicious ownership when uid mismatch is detected",
     async () => {
       const stateDir = makeTempDir();

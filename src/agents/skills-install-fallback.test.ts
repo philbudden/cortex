@@ -97,7 +97,9 @@ describe("skills-install fallback edge cases", () => {
     await fs.rm(workspaceDir, { recursive: true, force: true }).catch(() => undefined);
   });
 
-  it("apt-get available but sudo missing/unusable returns helpful error for go install", async () => {
+  it.runIf(typeof process.getuid === "function" && process.getuid() !== 0)(
+    "apt-get available but sudo missing/unusable returns helpful error for go install",
+    async () => {
     // go not available, brew not available, apt-get + sudo are available, sudo check fails
     hasBinaryMock.mockImplementation((bin: string) => {
       if (bin === "go") {
@@ -142,7 +144,9 @@ describe("skills-install fallback edge cases", () => {
     expect(aptCalls).toHaveLength(0);
   });
 
-  it("status-selected go installer fails gracefully when apt fallback needs sudo", async () => {
+  it.runIf(typeof process.getuid === "function" && process.getuid() !== 0)(
+    "status-selected go installer fails gracefully when apt fallback needs sudo",
+    async () => {
     // no go/brew, but apt and sudo are present
     hasBinaryMock.mockImplementation((bin: string) => {
       if (bin === "go" || bin === "brew") {
@@ -174,7 +178,9 @@ describe("skills-install fallback edge cases", () => {
     expect(result.message).toContain("sudo is not usable");
   });
 
-  it("handles sudo probe spawn failures without throwing", async () => {
+  it.runIf(typeof process.getuid === "function" && process.getuid() !== 0)(
+    "handles sudo probe spawn failures without throwing",
+    async () => {
     // go not available, brew not available, apt-get + sudo appear available
     hasBinaryMock.mockImplementation((bin: string) => {
       if (bin === "go") {

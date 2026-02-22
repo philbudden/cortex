@@ -41,6 +41,8 @@ export default defineConfig({
       "src/infra/host-env-security.policy-parity.test.ts",
       // Phase 0: tests requiring scripts not present (docker-setup.sh)
       "src/docker-setup.test.ts",
+      // Phase 0: appcast.xml not present (macOS Sparkle update feed)
+      "test/appcast.test.ts",
     ],
   },
 });
