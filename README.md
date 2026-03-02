@@ -4,14 +4,25 @@ This is a PoC - not fit for production use
 ## Getting Started
 
 ### Prerequisites
-- Docker with Docker Compose
-- (Optional) A devcontainer-capable editor; the `.devcontainer.json` mounts the host Docker socket
+- Docker with Docker Compose (production / standalone use)
+- **Devcontainer on K3S:** Podman is used instead of Docker inside the devcontainer (see below)
+- (Optional) A devcontainer-capable editor
 
 ### Run the stack
 
+**Outside the devcontainer (Docker):**
 ```bash
 docker compose up --build
 ```
+
+**Inside the devcontainer on K3S (Podman):**
+```bash
+podman-compose up --build
+# or use the shell aliases set up by the devcontainer:
+docker compose up --build
+```
+
+The `docker-compose.yml` is identical for both runtimes.
 
 | Service    | URL                        | Notes                          |
 |------------|----------------------------|--------------------------------|
