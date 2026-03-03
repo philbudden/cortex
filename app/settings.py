@@ -11,9 +11,7 @@ class Settings(BaseSettings):
     max_tokens: int = 512
     ingress_port: int = 8000
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
 settings = Settings()
