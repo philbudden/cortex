@@ -24,10 +24,38 @@ _PROMPT_HEADER = """\
 Classify the following user input into exactly one intent category.
 
 Reply with ONLY valid JSON — no prose, no markdown, no code fences.
-Schema: {"intent": "<category>", "confidence": <0.0-1.0>}
-Valid intents: execution, decomposition, novel_reasoning, ambiguous
+Use exactly this schema: {"intent": "<category>", "confidence": <0.0-1.0>}
+The "intent" field MUST be one of these exact strings:
+  execution, decomposition, novel_reasoning, ambiguous
+
+- execution: a concrete task to carry out (write, run, create, calculate, translate)
+- decomposition: a complex task that needs breaking into sub-tasks
+- novel_reasoning: open-ended analysis, explanation, or synthesis
+- ambiguous: unclear or underspecified request
 
 User input: """
+
+# Maps common LLM-generated intent variants to valid schema values.
+_INTENT_ALIASES: dict[str, str] = {
+    "creative_writing": "execution",
+    "creative": "execution",
+    "generation": "execution",
+    "task": "execution",
+    "action": "execution",
+    "command": "execution",
+    "analysis": "novel_reasoning",
+    "reasoning": "novel_reasoning",
+    "explanation": "novel_reasoning",
+    "synthesis": "novel_reasoning",
+    "planning": "decomposition",
+    "complex": "decomposition",
+    "unclear": "ambiguous",
+    "unknown": "ambiguous",
+    "other": "ambiguous",
+}
+
+# Alternative field names some models use instead of "intent".
+_INTENT_FIELD_CANDIDATES = ("intent", "category", "type", "classification", "class")
 
 
 async def classify(user_input: str) -> ClassifierResponse:
@@ -44,7 +72,7 @@ async def classify(user_input: str) -> ClassifierResponse:
         result = _parse(raw)
         if result is not None:
             return result
-        logger.warning("Classifier attempt %d produced invalid JSON: %r", attempt + 1, raw)
+        logger.warning("Classifier attempt %d: could not parse response: %r", attempt + 1, raw)
 
     logger.error("Classifier failed after 2 attempts; returning fallback.")
     return ClassifierResponse(intent="ambiguous", confidence=0.0)
@@ -67,13 +95,45 @@ async def _call_ollama(user_input: str) -> str:
 
 def _parse(raw: str) -> Optional[ClassifierResponse]:
     text = raw.strip()
-    # Strip markdown code fences (```json ... ``` or ``` ... ```) as a fallback
-    # in case a model ignores the format constraint.
+    # Strip markdown code fences in case a model ignores the format constraint.
     if text.startswith("```"):
         lines = text.splitlines()
         text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:]).strip()
+
     try:
         data = json.loads(text)
-        return ClassifierResponse(**data)
-    except (json.JSONDecodeError, ValidationError, TypeError):
+    except (json.JSONDecodeError, TypeError):
         return None
+
+    if not isinstance(data, dict):
+        return None
+
+    # Try strict parse first.
+    try:
+        return ClassifierResponse(**data)
+    except ValidationError:
+        pass
+
+    # Normalise: find the intent value under any common field name, then map aliases.
+    raw_intent = None
+    for field in _INTENT_FIELD_CANDIDATES:
+        if field in data:
+            raw_intent = str(data[field]).strip().lower().replace(" ", "_").replace("-", "_")
+            break
+
+    if raw_intent is None:
+        logger.warning("Classifier response has no recognisable intent field: %r", data)
+        return None
+
+    intent = _INTENT_ALIASES.get(raw_intent, raw_intent)
+    confidence = float(data.get("confidence", data.get("score", data.get("certainty", 0.5))))
+
+    try:
+        return ClassifierResponse(intent=intent, confidence=confidence)
+    except ValidationError:
+        logger.warning(
+            "Classifier intent %r (normalised from %r) not in schema; treating as ambiguous",
+            intent, raw_intent,
+        )
+        return ClassifierResponse(intent="ambiguous", confidence=0.0)
+

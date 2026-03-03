@@ -99,6 +99,36 @@ async def test_classifier_parses_markdown_fenced_json():
     assert result.intent == "execution"
 
 
+@pytest.mark.anyio
+async def test_classifier_normalises_alias_intent():
+    """_parse maps a known alias (e.g. 'creative_writing') to a valid intent."""
+    from app.classifier import _parse
+
+    result = _parse('{"intent": "creative_writing", "confidence": 0.8}')
+    assert result is not None
+    assert result.intent == "execution"
+
+
+@pytest.mark.anyio
+async def test_classifier_normalises_alternative_field_name():
+    """_parse accepts 'category' as an alternative to 'intent'."""
+    from app.classifier import _parse
+
+    result = _parse('{"category": "execution", "confidence": 0.7}')
+    assert result is not None
+    assert result.intent == "execution"
+
+
+@pytest.mark.anyio
+async def test_classifier_normalises_capitalised_intent():
+    """_parse lowercases the intent value before matching."""
+    from app.classifier import _parse
+
+    result = _parse('{"intent": "Execution", "confidence": 0.85}')
+    assert result is not None
+    assert result.intent == "execution"
+
+
 # ---------------------------------------------------------------------------
 # /ingest happy path (mock Ollama)
 # ---------------------------------------------------------------------------
