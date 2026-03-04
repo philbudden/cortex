@@ -1,200 +1,137 @@
-# PLAN_PHASE1_TAILORED.md
+# PHASE 2 -- INTENT-AWARE EXECUTION & RELIABILITY HARDENING
 
-## Local Agentic Platform -- Phase 1 (Tailored to Current Repo)
+## Objective
 
-Date: 2026-03-03
+Phase 2 upgrades the Phase 1 architecture by:
 
-------------------------------------------------------------------------
+-   Making worker prompting intent-aware
+-   Hardening classifier reliability
+-   Enforcing deterministic behavior
+-   Improving observability
+-   Strengthening failure handling
 
-# Current Repository Structure (Observed)
-
-Root: - Dockerfile - docker-compose.yml - requirements.txt - PLAN.md -
-README.md - .devcontainer.json
-
-/app: - main.py - classifier.py - router.py - worker.py - models.py -
-settings.py
-
-/tests: - test_smoke.py
-
-Phase 0 confirms: - OpenWebUI → Ingress proxy working - `/ingest`
-endpoint stubbed - Docker stack healthy - Smoke tests runnable
+This document is designed to be read as context by an LLM-powered coding
+assistant.
 
 ------------------------------------------------------------------------
 
-# Phase 1 Objective
+# Architectural Constraints (Must Remain True)
 
-Replace stub logic in `app/main.py` with:
-
-Classifier (LLM via Ollama) → Deterministic Router (Python) → Worker
-(LLM via Ollama) → Structured response
-
-Maintain strict control-plane separation.
-
-No memory. No tools. No cloud APIs. No architectural expansion beyond
-current files.
-
-------------------------------------------------------------------------
-
-# File-by-File Implementation Plan
-
-## 1. app/settings.py
-
-Add explicit configuration:
-
--   OLLAMA_BASE_URL (default: http://ollama:11434)
--   CLASSIFIER_MODEL (e.g. llama3)
--   WORKER_MODEL (same for now)
--   REQUEST_TIMEOUT
--   MAX_TOKENS
-
-All model names must be configurable via environment variables in
-docker-compose.yml.
+1.  Single entrypoint: `/ingest`
+2.  Exactly two LLM calls per successful request:
+    -   1 classifier call
+    -   1 worker call
+3.  Router remains pure Python (no LLM calls)
+4.  No memory layer
+5.  No tool execution
+6.  No autonomous planning
 
 ------------------------------------------------------------------------
 
-## 2. app/models.py
+# Scope of Changes
 
-Define strict Pydantic schemas:
+## 1. Intent-Aware Worker Prompting
 
-ClassifierResponse: - intent:
-Literal\["execution","decomposition","novel_reasoning","ambiguous"\] -
-confidence: float
+Worker behavior must differ based on intent:
 
-IngestRequest: - input: str
+### execution
 
-IngestResponse: - intent: str - confidence: float - response: str
+-   Direct, concise answer
+-   No planning structure
 
-Validation must fail loudly if classifier JSON invalid.
+### decomposition
 
-------------------------------------------------------------------------
+-   Structured output
+-   Steps / phases clearly enumerated
 
-## 3. app/classifier.py
+### novel_reasoning
 
-Responsibilities: - Call Ollama `/api/generate` - Enforce JSON-only
-output - Validate against ClassifierResponse schema - Retry once if JSON
-invalid - On second failure → return: intent="ambiguous" confidence=0.0
+-   Creative exploration
+-   Speculative or system-design style output
 
-Classifier must: - Be stateless - Use deterministic temperature
-(e.g. 0) - Never include reasoning text
+### ambiguous
 
-------------------------------------------------------------------------
+-   No worker call
+-   Return clarification question
 
-## 4. app/router.py
-
-Router must be PURE PYTHON.
-
-No LLM calls allowed.
-
-Implement function:
-
-route(intent: str) -\> str
-
-Mapping (Phase 1): - execution → "worker" - decomposition → "worker" -
-novel_reasoning → "worker" - ambiguous → "clarify"
-
-Router does not inspect user text.
+Implementation requirement: - Worker receives both `input_text` and
+`intent` - Worker selects prompt template based on intent
 
 ------------------------------------------------------------------------
 
-## 5. app/worker.py
+## 2. Classifier Hardening
 
-Responsibilities: - Accept (input_text, intent) - Call Ollama - Return
-natural language response
+Classifier must:
 
-Worker must: - Not modify routing - Not perform classification - Not
-persist state - Not call other agents
+-   Use temperature = 0
+-   Use deterministic prompt
+-   Require strict JSON output
+-   Validate via Pydantic schema
+-   Retry once if invalid
+-   Return ambiguous if still invalid
 
-------------------------------------------------------------------------
+Expected schema:
 
-## 6. app/main.py
-
-Update `/ingest`:
-
-Flow:
-
-1.  Parse IngestRequest
-2.  Call classifier
-3.  Call router
-4.  If route == "clarify": return clarification template Else: call
-    worker
-5.  Return IngestResponse
-
-Remove stub logic entirely.
+{ "intent": "execution \| decomposition \| novel_reasoning \|
+ambiguous", "confidence": float }
 
 ------------------------------------------------------------------------
 
-# docker-compose.yml Updates
+## 3. Observability
 
-Ensure:
+Log the following per request:
 
--   ollama service exists
--   Ingress service depends_on ollama
--   Environment variables passed to container
--   Ports unchanged
+-   intent
+-   confidence
+-   classifier latency
+-   worker latency
+-   total latency
 
-Optional: Add healthcheck for Ollama.
-
-------------------------------------------------------------------------
-
-# Testing Expansion
-
-Extend `tests/test_smoke.py`:
-
-Add:
-
-1.  Test classifier schema validation
-2.  Test router deterministic mapping
-3.  Test worker returns non-empty string (mock Ollama if needed)
-4.  Test full `/ingest` happy path
-
-Keep tests lightweight. No external services required for unit tests.
+Logs must clearly show exactly two LLM calls.
 
 ------------------------------------------------------------------------
 
-# Logging Requirements
+## 4. Failure Handling
 
-Add structured logging in main.py:
+System must gracefully handle:
 
-Log: - intent - confidence - model latency - total request latency
+-   Ollama unavailable
+-   Model not found
+-   Invalid classifier JSON
+-   Empty input
+-   Worker timeout
 
-No tracing stack required.
+Failure result format:
 
-------------------------------------------------------------------------
+{ "intent": "ambiguous", "confidence": 0.0, "response":
+"`<polite clarification or failure message>`{=html}" }
 
-# Success Criteria
-
--   `/ingest` no longer returns stub
--   Real Ollama call confirmed
--   Invalid classifier output handled safely
--   Router contains zero LLM logic
--   All tests pass
--   Total new code \< \~300 lines
+System must not crash.
 
 ------------------------------------------------------------------------
 
-# Guardrails
+# Non-Goals
 
--   No new directories
--   No planner agent yet
--   No memory tier
+-   No memory persistence
+-   No conversation history
+-   No external API calls
 -   No tool execution
--   No async complexity
-
-Architecture must remain understandable in \<10 minutes of reading.
+-   No autonomous loops
 
 ------------------------------------------------------------------------
 
-# Phase 2 (Preview Only)
+# Completion Criteria
 
--   Planner agent
--   Budget guardrails
--   Memory tiers
--   Tool-enabled worker
--   Model escalation policies
+Phase 2 is complete when:
+
+-   Worker output style changes by intent
+-   Classifier intent is stable across repeated runs
+-   Exactly 2 LLM calls per successful request
+-   Ambiguous intent properly blocks worker call
+-   System survives Ollama shutdown
+-   Deterministic behavior confirmed
 
 ------------------------------------------------------------------------
 
-Guiding Principle:
-
-LLMs propose. Code disposes.
+# End of Phase 2 Plan
 
