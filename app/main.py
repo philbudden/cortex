@@ -9,6 +9,7 @@ import logging
 import time
 import uuid
 
+import httpx
 from fastapi import FastAPI
 from pydantic import BaseModel
 
@@ -24,6 +25,9 @@ app = FastAPI(title="Agentic Platform — Ingress API")
 
 _CLARIFY_RESPONSE = (
     "I'm not sure what you're asking. Could you provide more detail or clarify your request?"
+)
+_WORKER_FAILURE_RESPONSE = (
+    "I'm sorry, I was unable to process your request right now. Please try again later."
 )
 
 
@@ -46,7 +50,14 @@ async def ingest(request: IngestRequest) -> IngestResponse:
         response_text = _CLARIFY_RESPONSE
         t_worker = t_classified
     else:
-        response_text = await generate(request.input, classifier_result.intent)
+        try:
+            response_text = await generate(request.input, classifier_result.intent)
+        except httpx.HTTPError as exc:
+            logger.error("Worker call failed: %s", exc)
+            response_text = _WORKER_FAILURE_RESPONSE
+            classifier_result = classifier_result.model_copy(
+                update={"intent": "ambiguous", "confidence": 0.0}
+            )
         t_worker = time.monotonic()
 
     total_latency = time.monotonic() - t_start
