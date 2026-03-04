@@ -28,10 +28,28 @@ Use exactly this schema: {"intent": "<category>", "confidence": <0.0-1.0>}
 The "intent" field MUST be one of these exact strings:
   execution, decomposition, novel_reasoning, ambiguous
 
-- execution: a concrete task to carry out (write, run, create, calculate, translate)
-- decomposition: a complex task that needs breaking into sub-tasks
-- novel_reasoning: open-ended analysis, explanation, or synthesis
-- ambiguous: unclear or underspecified request
+Category definitions and examples:
+
+- execution: a concrete, bounded task with a clear deliverable.
+    Examples: "Write a haiku about databases", "Translate this to French",
+    "Summarize the theory of relativity in 3 sentences",
+    "Write a function that reverses a string", "Calculate 15% of 200".
+    Key signal: the output format is known and finite.
+
+- decomposition: a broad goal that requires breaking into multiple sub-tasks or phases.
+    Examples: "How would I build a scalable SaaS architecture?",
+    "What steps are needed to launch a startup?",
+    "Plan a migration from monolith to microservices".
+    Key signal: the request implies a multi-step process or plan.
+
+- novel_reasoning: open-ended analysis, speculation, or synthesis with no single right answer.
+    Examples: "Design a new economic system for Mars colonies",
+    "What are the ethical implications of AI?",
+    "Compare capitalism and socialism".
+    Key signal: the answer requires original thinking, not execution of a known task.
+
+- ambiguous: unclear or underspecified — not enough context to classify.
+    Examples: "Help.", "Do the thing.", "What about it?"
 
 User input: """
 

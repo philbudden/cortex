@@ -22,6 +22,7 @@ services:
       - WORKER_MODEL=llama3
       - CLASSIFIER_TIMEOUT=60
       - WORKER_TIMEOUT=300
+      - MAX_TOKENS=256
     depends_on:
       - ollama
     networks:

@@ -17,19 +17,18 @@ logger = logging.getLogger(__name__)
 _PROMPTS: dict[str, str] = {
     "execution": (
         "You are a precise assistant. The user has asked you to perform a concrete task.\n"
-        "Give a direct, concise answer. No planning structure. No preamble.\n\n"
+        "Give a direct, concise answer. No planning structure. No preamble. No commentary.\n"
+        "Respond in no more than 150 words.\n\n"
         "User request: "
     ),
     "decomposition": (
-        "You are a structured assistant. The user has a complex task that needs breaking into steps.\n"
-        "Provide a clear, numbered breakdown of the steps or phases required.\n"
-        "Be thorough but concise.\n\n"
+        "You are a structured assistant. The user needs a task broken into steps.\n"
+        "Provide exactly 3 to 5 numbered steps. One sentence per step. No preamble.\n\n"
         "User request: "
     ),
     "novel_reasoning": (
-        "You are a creative, analytical assistant. The user wants open-ended analysis or synthesis.\n"
-        "Explore the topic creatively. You may speculate, consider multiple angles, "
-        "or apply system-design style thinking.\n\n"
+        "You are an analytical assistant. The user wants open-ended thinking.\n"
+        "Give a focused, insightful response. Limit to 3 sentences.\n\n"
         "User request: "
     ),
 }

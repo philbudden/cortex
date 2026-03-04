@@ -258,28 +258,29 @@ def test_health():
 
 @pytest.mark.anyio
 async def test_worker_uses_execution_prompt():
-    """generate() for execution intent includes direct/concise wording."""
+    """execution prompt enforces conciseness."""
     from app.worker import _PROMPTS
 
-    assert "direct" in _PROMPTS["execution"].lower() or "concise" in _PROMPTS["execution"].lower()
+    prompt = _PROMPTS["execution"].lower()
+    assert "concise" in prompt or "150 words" in prompt
 
 
 @pytest.mark.anyio
 async def test_worker_uses_decomposition_prompt():
-    """generate() for decomposition intent mentions steps/breakdown."""
+    """decomposition prompt requests numbered steps."""
     from app.worker import _PROMPTS
 
     prompt = _PROMPTS["decomposition"].lower()
-    assert "step" in prompt or "breakdown" in prompt or "numbered" in prompt
+    assert "numbered" in prompt or "step" in prompt
 
 
 @pytest.mark.anyio
 async def test_worker_uses_novel_reasoning_prompt():
-    """generate() for novel_reasoning intent mentions creative/analytical."""
+    """novel_reasoning prompt requests focused analytical response."""
     from app.worker import _PROMPTS
 
     prompt = _PROMPTS["novel_reasoning"].lower()
-    assert "creative" in prompt or "analytical" in prompt or "speculate" in prompt
+    assert "analytical" in prompt or "insight" in prompt or "focused" in prompt
 
 
 @pytest.mark.anyio
