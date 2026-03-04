@@ -88,7 +88,7 @@ async def _call_ollama(user_input: str) -> str:
         "options": {"temperature": 0, "num_predict": settings.max_tokens},
     }
     logger.info("LLM call 1/2: classifier model=%s", settings.classifier_model)
-    async with httpx.AsyncClient(timeout=settings.request_timeout) as client:
+    async with httpx.AsyncClient(timeout=settings.classifier_timeout) as client:
         resp = await client.post(f"{settings.ollama_base_url}/api/generate", json=payload)
         resp.raise_for_status()
         return resp.json()["response"]

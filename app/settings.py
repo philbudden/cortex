@@ -7,7 +7,8 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://ollama:11434"
     classifier_model: str = "llama3"
     worker_model: str = "llama3"
-    request_timeout: int = 60
+    classifier_timeout: int = 60   # short: classifier generates ~30 JSON tokens
+    worker_timeout: int = 300      # long: worker may generate 512 tokens on CPU
     max_tokens: int = 512
     ingress_port: int = 8000
 
