@@ -102,6 +102,12 @@ curl -X POST http://localhost:8000/ingest \
 1. Browse to http://localhost:3000 and create a local account.
 2. Type any message — it routes through the ingress API to Ollama.
 
+> **Single-turn architecture:** The `/v1/chat/completions` shim extracts only the
+> most recent user message from the conversation. Prior turns are visible in the
+> OpenWebUI chat history (stored in its local volume) but are **not** sent to the
+> ingress API — each request is processed independently with no memory of previous
+> exchanges. This is a deliberate architectural constraint of the PoC.
+
 ### Run smoke tests (no Docker required)
 
 ```bash
