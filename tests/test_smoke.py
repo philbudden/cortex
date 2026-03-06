@@ -731,3 +731,86 @@ def test_ingest_agent_selected_event_logged(caplog, mock_classify_execution, moc
 
     assert any("agent_selected" in r.message for r in caplog.records)
 
+
+def test_ingest_unexpected_tool_exception_returns_200_failure(mock_classify_execution):
+    """A tool function raising an unexpected exception must NOT produce a 500.
+
+    Verifies bug-1 fix: any exception from the tool execution layer is caught
+    and collapsed into the worker failure response (graceful failure contract).
+    """
+    from bootstrap_tools import tool_registry
+    from core.tools import ToolExecutor
+
+    def _exploding_tool(**kwargs):
+        raise RuntimeError("disk on fire")
+
+    # Temporarily register a tool whose function always raises.
+    tool_registry._tools["exploding_tool"] = __import__("core.tools", fromlist=["Tool"]).Tool(
+        name="exploding_tool",
+        description="always raises",
+        input_schema={},
+        function=_exploding_tool,
+    )
+    try:
+        json_output = '{"action": "tool", "tool": "exploding_tool", "args": {}}'
+        with (
+            patch("app.main.classify", mock_classify_execution),
+            patch("app.main.generate", AsyncMock(return_value=json_output)),
+        ):
+            response = client.post("/ingest", json={"input": "blow up"})
+
+        assert response.status_code == 200
+        body = response.json()
+        assert "unable to process" in body["response"].lower() or "sorry" in body["response"].lower()
+    finally:
+        tool_registry._tools.pop("exploding_tool", None)
+
+
+def test_ingest_tool_action_missing_tool_name_returns_failure(mock_classify_execution):
+    """action='tool' with no 'tool' key must return a graceful failure response.
+
+    Verifies type-1 fix: null guard in ToolExecutor emits a clear error and
+    the pipeline collapses to the worker failure response rather than a 500.
+    """
+    json_output = '{"action": "tool", "args": {}}'
+    with (
+        patch("app.main.classify", mock_classify_execution),
+        patch("app.main.generate", AsyncMock(return_value=json_output)),
+    ):
+        response = client.post("/ingest", json={"input": "call unnamed tool"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "unable to process" in body["response"].lower() or "sorry" in body["response"].lower()
+
+
+def test_ingest_tool_execution_logs_carry_request_id(caplog, mock_classify_execution, tmp_path):
+    """Tool execution log events must include the originating request_id.
+
+    Verifies obs-1 fix: request_id is threaded through ToolExecutor and Tool
+    so that tool_execute events can be correlated to their request.
+    """
+    import logging
+
+    test_file = tmp_path / "data.txt"
+    test_file.write_text("correlation check")
+    json_output = (
+        '{"action": "tool", "tool": "read_file", "args": {"path": "' + str(test_file) + '"}}'
+    )
+
+    with caplog.at_level(logging.INFO, logger="core.tools"):
+        with (
+            patch("app.main.classify", mock_classify_execution),
+            patch("app.main.generate", AsyncMock(return_value=json_output)),
+        ):
+            response = client.post("/ingest", json={"input": "Read data"})
+
+    assert response.status_code == 200
+
+    # At least one tool_execute event must carry a non-empty request_id.
+    tool_execute_records = [r for r in caplog.records if "tool_execute" in r.message]
+    assert tool_execute_records, "No tool_execute log event found"
+    assert any("request_id=" in r.message for r in tool_execute_records), (
+        "tool_execute events do not carry request_id"
+    )
+

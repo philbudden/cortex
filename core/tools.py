@@ -31,14 +31,15 @@ class Tool:
     input_schema: Dict[str, str]
     function: Callable[..., Any]
 
-    def execute(self, args: Dict[str, Any]) -> Any:
-        logger.info("event=tool_execute tool=%s args=%s", self.name, args)
+    def execute(self, args: Dict[str, Any], request_id: str = "") -> Any:
+        logger.info("event=tool_execute tool=%s request_id=%s args=%s", self.name, request_id, args)
 
         result = self.function(**args)
 
         logger.info(
-            "event=tool_execute_complete tool=%s result_type=%s",
+            "event=tool_execute_complete tool=%s request_id=%s result_type=%s",
             self.name,
+            request_id,
             type(result).__name__,
         )
 
@@ -84,7 +85,7 @@ class ToolRegistry:
         return self._tools[name]
 
     def list(self) -> list:
-        logger.info("event=tool_list_requested count=%d", len(self._tools))
+        logger.debug("event=tool_list_requested count=%d", len(self._tools))
         return list(self._tools.keys())
 
 
@@ -130,30 +131,39 @@ class ToolExecutor:
     def __init__(self, registry: ToolRegistry) -> None:
         self.registry = registry
 
-    def execute(self, action: AgentAction) -> Any:
+    def execute(self, action: AgentAction, request_id: str = "") -> Any:
         logger.info(
-            "event=executor_received action=%s tool=%s",
+            "event=executor_received action=%s tool=%s request_id=%s",
             action.action,
             action.tool,
+            request_id,
         )
 
         if action.action == "respond":
-            logger.info("event=executor_direct_response")
+            logger.info("event=executor_direct_response request_id=%s", request_id)
             return action.content
 
         if action.action == "tool":
-            tool = self.registry.get(action.tool)  # type: ignore[arg-type]
-            result = tool.execute(action.args)
+            if not action.tool:
+                logger.error(
+                    "event=executor_tool_name_missing request_id=%s",
+                    request_id,
+                )
+                raise ValueError("Tool action is missing a tool name")
+
+            tool = self.registry.get(action.tool)
+            result = tool.execute(action.args, request_id=request_id)
 
             logger.info(
-                "event=tool_result tool=%s result_type=%s",
+                "event=tool_result tool=%s request_id=%s result_type=%s",
                 action.tool,
+                request_id,
                 type(result).__name__,
             )
 
             return result
 
-        logger.error("event=executor_unknown_action action=%s", action.action)
+        logger.error("event=executor_unknown_action action=%s request_id=%s", action.action, request_id)
         raise ValueError(f"Unknown action type: {action.action}")
 
 
@@ -162,18 +172,27 @@ class ToolExecutor:
 # ---------------------------------------------------------------------------
 
 
-def parse_agent_output(raw: str) -> AgentAction:
+def parse_agent_output(raw: str, request_id: str = "") -> AgentAction:
     """Parse a JSON string emitted by the agent into an AgentAction.
 
     Raises json.JSONDecodeError if *raw* is not valid JSON, or any other
     exception if the parsed structure is unusable.  The caller is responsible
     for graceful fallback.
     """
-    logger.info("event=agent_output_received raw=%r", raw[:200] if raw else "")
+    logger.info(
+        "event=agent_output_received request_id=%s raw=%r",
+        request_id,
+        raw[:200] if raw else "",
+    )
 
     try:
         data = json.loads(raw)
         return AgentAction.from_dict(data)
     except Exception as exc:
-        logger.error("event=agent_output_parse_error error=%r raw=%r", str(exc), raw[:200])
+        logger.error(
+            "event=agent_output_parse_error request_id=%s error=%r raw=%r",
+            request_id,
+            str(exc),
+            raw[:200],
+        )
         raise

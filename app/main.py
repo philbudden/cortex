@@ -76,15 +76,15 @@ async def ingest(request: IngestRequest) -> IngestResponse:
         try:
             response_text = await generate(request.input, classifier_result.intent, request_id)
             try:
-                action = parse_agent_output(response_text)
-                response_text = executor.execute(action)
+                action = parse_agent_output(response_text, request_id=request_id)
+                response_text = executor.execute(action, request_id=request_id)
             except json.JSONDecodeError:
                 # LLM returned plain text instead of JSON — treat as direct reply.
                 pass
-            except ValueError as exc:
+            except Exception as exc:
                 logger.error(
-                    "event=tool_execution_error request_id=%s error=%r",
-                    request_id, str(exc),
+                    "event=tool_execution_error request_id=%s error_type=%s error=%r",
+                    request_id, type(exc).__name__, str(exc),
                 )
                 response_text = _WORKER_FAILURE_RESPONSE
         except httpx.HTTPError as exc:

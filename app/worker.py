@@ -1,7 +1,12 @@
 """Worker agent — calls the LLM to produce the final user-facing response.
 
-Receives original user input and classifier intent; returns free-form text.
-No memory, no tools.
+Receives original user input and classifier intent; returns a JSON action
+envelope for the ToolExecutor to dispatch:
+
+  {"action": "respond", "content": "..."}          — direct reply
+  {"action": "tool", "tool": "<name>", "args": {}} — tool call
+
+No memory, no conversation history.
 """
 
 import logging
