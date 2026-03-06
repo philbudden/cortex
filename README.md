@@ -1,175 +1,29 @@
 # local-agentic-platform-poc
-This is a PoC - not fit for production use
 
-## Prerequisites
+> **PoC — not production-ready.**
 
-- **Ollama** — must be installed and running on the host machine before starting the stack.
-  Download from https://ollama.com and pull a model, e.g.:
-  ```bash
-  ollama pull llama3.2:3b
-  ```
-  Ollama must be listening on its default port (`11434`). GPU acceleration is configured by Ollama itself — see the Ollama docs for your platform.
-- **Docker or Podman with Compose** — to run the stack (**must be run on the host machine, not inside the devcontainer**)
-- **Python 3.9+** — for tests and running the ingress service directly
-- (Optional) A devcontainer-capable editor (DevPod, VS Code)
+## Why this exists
 
-## Getting Started
+Most "local AI" setups are one of two things: a raw Ollama endpoint with no orchestration, or a full agent framework (LangChain, AutoGen, CrewAI) with hidden abstractions, implicit memory, and non-deterministic routing.
 
-### Run the full stack (host machine only)
+This project sits in between. It is a minimal, inspectable pipeline that routes user requests through two LLM calls — a classifier and a worker — with a pure Python router in between. Every decision is logged. Nothing is hidden.
 
-> ⚠️ The devcontainer runs in DevPod "dockerless" mode — it has no container engine and cannot run `docker compose` or `podman-compose`. Run these commands on your **host machine**.
-
-```bash
-# Docker
-docker compose up --build
-
-# Podman
-podman-compose up --build
-```
-
-| Service     | URL                    | Notes                      |
-|-------------|------------------------|----------------------------|
-| OpenWebUI   | http://localhost:3000  | Chat interface             |
-| Ingress API | http://localhost:8000  | Internal orchestration API |
-| Ollama      | http://localhost:11434 | Runs on host (not in Docker) |
-
-### Use a remote Ollama instance
-
-Set `OLLAMA_BASE_URL` to point at any Ollama instance before starting:
-
-```bash
-OLLAMA_BASE_URL=http://192.168.1.50:11434 docker compose up --build
-```
-
-Or edit `OLLAMA_BASE_URL` directly in `docker-compose.yml`.
-
-> **How overrides work:** `docker-compose.yml` uses `${VAR:-default}` interpolation for all settings. Variables set in your shell take precedence over the defaults; you never need to edit the file for one-off runs.
-
-### Configure the model
-
-The classifier and worker can use different models. Override via env vars or edit `docker-compose.yml`:
-
-```bash
-CLASSIFIER_MODEL=llama3.2:3b WORKER_MODEL=llama3.2:3b docker compose up --build
-```
-
-Both default to `llama3.2:3b`. Any model available in your Ollama installation can be used — pull it first with `ollama pull <model>`.
-
-| Variable           | Default        | Purpose                    |
-|--------------------|----------------|----------------------------|
-| `OLLAMA_BASE_URL`  | `http://host.docker.internal:11434` | Ollama endpoint |
-| `CLASSIFIER_MODEL` | `llama3.2:3b`  | Intent classification      |
-| `WORKER_MODEL`     | `llama3.2:3b`  | Response generation        |
-| `LOG_LEVEL`        | `INFO`         | Logging verbosity (`DEBUG`, `INFO`, `WARNING`) |
-| `DEBUG_ROUTER`     | `false`        | When `true`, logs classifier and worker prompts at DEBUG level |
-
-### Run the ingress service only (devcontainer / no Docker)
-
-```bash
-pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-> Without Ollama running, `/ingest` calls will hit the network-error path and return `intent=ambiguous`. Use the mock-based tests to work without Ollama.
-
-### Verify the endpoint
-
-```bash
-curl -X POST http://localhost:8000/ingest \
-  -H "Content-Type: application/json" \
-  -d '{"input": "Write a haiku about databases"}'
-# → {"intent":"execution","confidence":0.92,"response":"..."}
-```
-
-> ⚠️ **Shell quoting:** Always wrap the `-d` payload in **single quotes** and keep the input value free of single quotes. If your input contains an apostrophe (e.g. `I'm`, `don't`), the apostrophe will close the shell string early and `curl` will appear to freeze — bash is silently waiting for you to close the string. Use Ctrl-C to recover.
->
-> Safe alternatives for inputs with apostrophes:
-> ```bash
-> # Option 1 — escape with '\''
-> curl -X POST http://localhost:8000/ingest \
->   -H "Content-Type: application/json" \
->   -d '{"input": "I'\''m launching a bookstore"}'
->
-> # Option 2 — write JSON to a file and use @
-> echo '{"input": "I'\''m launching a bookstore"}' > /tmp/body.json
-> curl -X POST http://localhost:8000/ingest \
->   -H "Content-Type: application/json" \
->   -d @/tmp/body.json
-> ```
-
-### OpenWebUI
-
-1. Browse to http://localhost:3000 and create a local account.
-2. Type any message — it routes through the ingress API to Ollama.
-
-> **Single-turn architecture:** The `/v1/chat/completions` shim extracts only the
-> most recent user message from the conversation. Prior turns are visible in the
-> OpenWebUI chat history (stored in its local volume) but are **not** sent to the
-> ingress API — each request is processed independently with no memory of previous
-> exchanges. This is a deliberate architectural constraint of the PoC.
-
-### Run smoke tests (no Docker required)
-
-```bash
-pip install -r requirements.txt
-pytest tests/test_smoke.py -v
-```
+The goal is to understand what an agentic system actually does before adding complexity.
 
 ---
 
-## Observability
+## How it differs from existing agent frameworks
 
-### Checking logs
+| Property | LangChain / AutoGen / CrewAI | This project |
+|---|---|---|
+| Routing | Semantic / LLM-driven | Deterministic dict lookup |
+| Memory | Built-in (optional) | None — each request is stateless |
+| Tool calling | First-class feature | Not implemented |
+| Observability | Varies | Structured logs, correlation IDs, latency on every request |
+| Model backend | Many | Ollama only |
+| Complexity | High | ~400 lines of application code |
 
-Each request is assigned a unique `request_id`. All log lines include `event=<name>` and `request_id=<id>` so you can trace a single request end-to-end.
-
-**Docker (follow live):**
-```bash
-docker compose logs -f ingress
-```
-
-**Filter a single request by ID:**
-```bash
-docker compose logs ingress | grep "request_id=<id>"
-```
-
-**Expected log sequence for a successful request (LLM classification path):**
-```
-event=request_received request_id=<id>
-event=llm_call request_id=<id> call=1/2 ...
-event=classifier_result request_id=<id> intent=execution confidence=0.95 source=llm
-event=classifier_latency request_id=<id> latency_ms=...
-event=intent_router request_id=<id> intent=execution route=worker ...
-event=worker_start request_id=<id> worker=worker intent=execution
-event=llm_call request_id=<id> call=2/2 ...
-event=worker_complete request_id=<id> worker=worker latency_ms=...
-event=request_complete request_id=<id> intent=execution confidence=... total_latency_ms=...
-```
-
-**For inputs matching a prefix (e.g. "Write...", "How do I...")** the classifier short-circuits before any LLM call — `source=prefix_match` appears and the `llm_call 1/2` / `classifier_latency` lines are absent:
-```
-event=request_received request_id=<id>
-event=classifier_result request_id=<id> intent=execution confidence=0.95 source=prefix_match
-event=intent_router request_id=<id> intent=execution route=worker ...
-event=worker_start ...
-event=worker_complete ...
-event=request_complete ...
-```
-
-### Enable debug logging
-
-Set `DEBUG_ROUTER=true` to log the classifier system prompt and worker prompt at `DEBUG` level:
-
-```bash
-DEBUG_ROUTER=true LOG_LEVEL=DEBUG docker compose up --build
-```
-
-### Inspect the routing table
-
-```bash
-curl http://localhost:8000/debug/routes
-# → {"routes":{"execution":"worker","planning":"worker","analysis":"worker","ambiguous":"clarify"}}
-```
+The deliberate constraints are the point: no memory hand-waving, no agent magic, no implicit state. If something goes wrong, the logs tell you exactly what happened.
 
 ---
 
@@ -180,14 +34,123 @@ User (browser)
   └─► OpenWebUI  (port 3000)
         └─► POST /v1/chat/completions  (Ingress API, port 8000)
               └─► POST /ingest  (internal orchestration)
-                    ├─► Classifier (Ollama on host) → intent + confidence
-                    ├─► Router (pure Python) → handler
-                    └─► Worker (Ollama on host) → response
+                    ├─► Classifier  — LLM call 1/2 → intent + confidence
+                    ├─► Router      — pure Python dict lookup → handler
+                    └─► Worker      — LLM call 2/2 → response text
 ```
 
-Ollama runs on the host machine. The ingress container reaches it via
-`host.docker.internal:11434` (Docker Desktop on Mac/Windows) or via the
-`host-gateway` extra_host on Linux. Override with `OLLAMA_BASE_URL` for
-remote deployments.
+- **Classifier** — calls Ollama, returns one of `execution | planning | analysis | ambiguous`. Deterministic prefix checks short-circuit common patterns before any LLM call.
+- **Router** — a Python dict. Given the same intent, always returns the same handler. No LLM involved.
+- **Worker** — selects an intent-aware prompt template, calls Ollama, returns free-form text.
+- **OpenWebUI** — UI only. `ENABLE_OLLAMA_API=false`. It cannot bypass the pipeline.
 
-See [PLAN.md](PLAN.md) for the full architecture description.
+Ollama runs on the host machine, not in Docker. The container reaches it via `host.docker.internal:11434`.
+
+---
+
+## Quick start
+
+**Prerequisites:** [Ollama](https://ollama.com) running on the host, Docker or Podman with Compose.
+
+```bash
+# 1. Pull a model
+ollama pull llama3.2:3b
+
+# 2. Start the stack
+docker compose up --build
+```
+
+| Service     | URL                    |
+|-------------|------------------------|
+| OpenWebUI   | http://localhost:3000  |
+| Ingress API | http://localhost:8000  |
+
+```bash
+# 3. Send a request
+curl -X POST http://localhost:8000/ingest \
+  -H "Content-Type: application/json" \
+  -d '{"input": "Compare Kubernetes and Nomad"}'
+# → {"intent":"analysis","confidence":0.9,"response":"..."}
+```
+
+> ⚠️ If your input contains an apostrophe (`I'm`, `don't`), it will close the shell string and curl will appear to freeze. Use `'\''` to escape or write the payload to a file: `-d @body.json`
+
+**Use a remote Ollama instance:**
+```bash
+OLLAMA_BASE_URL=http://192.168.1.50:11434 docker compose up --build
+```
+
+**Change models:**
+```bash
+CLASSIFIER_MODEL=llama3.2:3b WORKER_MODEL=llama3.1:8b docker compose up --build
+```
+
+**OpenWebUI:** Browse to http://localhost:3000, create a local account, select the **agentic** model from the dropdown, and type any message.
+
+> **Single-turn only:** The `/v1/chat/completions` shim extracts only the most recent user message. Prior turns are visible in the OpenWebUI chat history but are not sent to the API — each request is processed independently. This is deliberate.
+
+**Run tests (no Docker required):**
+```bash
+pip install -r requirements.txt
+pytest tests/test_smoke.py -v
+```
+
+---
+
+## Configuration
+
+All settings are overridable via environment variables or a `.env` file.
+
+| Variable           | Default                             | Purpose                                                      |
+|--------------------|-------------------------------------|--------------------------------------------------------------|
+| `OLLAMA_BASE_URL`  | `http://host.docker.internal:11434` | Ollama endpoint                                              |
+| `CLASSIFIER_MODEL` | `llama3.2:3b`                       | Model used for intent classification                         |
+| `WORKER_MODEL`     | `llama3.2:3b`                       | Model used for response generation                           |
+| `CLASSIFIER_TIMEOUT` | `60`                              | Seconds before classifier call times out                     |
+| `WORKER_TIMEOUT`   | `300`                               | Seconds before worker call times out                         |
+| `MAX_TOKENS`       | `256`                               | Max tokens generated by the worker                           |
+| `LOG_LEVEL`        | `INFO`                              | `DEBUG`, `INFO`, or `WARNING`                                |
+| `DEBUG_ROUTER`     | `false`                             | When `true`, logs classifier and worker prompts at DEBUG     |
+
+`docker-compose.yml` uses `${VAR:-default}` interpolation throughout — shell variables always take precedence over defaults without editing the file.
+
+---
+
+## Observability
+
+Every request gets a `request_id`. All log lines carry `event=<name>` and `request_id=<id>`.
+
+```bash
+# Follow live
+docker compose logs -f ingress
+
+# Trace a single request
+docker compose logs ingress | grep "request_id=<id>"
+```
+
+**Typical log sequence:**
+```
+event=request_received      request_id=<id>
+event=llm_call              request_id=<id> call=1/2 model=llama3.2:3b
+event=classifier_result     request_id=<id> intent=analysis confidence=0.90 source=llm
+event=classifier_latency    request_id=<id> latency_ms=1820
+event=intent_router         request_id=<id> intent=analysis route=worker confidence=0.90
+event=worker_start          request_id=<id> worker=worker intent=analysis
+event=llm_call              request_id=<id> call=2/2 model=llama3.2:3b intent=analysis
+event=worker_complete       request_id=<id> worker=worker latency_ms=3240
+event=request_complete      request_id=<id> intent=analysis confidence=0.90 total_latency_ms=5063
+```
+
+For inputs matching a prefix (`Write...`, `How do I...`) the classifier short-circuits — no `llm_call 1/2` or `classifier_latency` appears, and `source=prefix_match`.
+
+**Enable prompt logging:**
+```bash
+DEBUG_ROUTER=true LOG_LEVEL=DEBUG docker compose up --build
+```
+
+**Inspect the routing table:**
+```bash
+curl http://localhost:8000/debug/routes
+# → {"routes":{"execution":"worker","planning":"worker","analysis":"worker","ambiguous":"clarify"}}
+```
+
