@@ -184,8 +184,8 @@ async def classify(user_input: str, request_id: str = "") -> ClassifierResponse:
                     pass
             logger.warning(
                 "event=classifier_retry request_id=%s attempt=%d reason=network_error "
-                "error_type=%s body=%r error=%s",
-                request_id, attempt + 1, type(exc).__name__, body, exc,
+                "error_type=%s body=%r error=%r",
+                request_id, attempt + 1, type(exc).__name__, body, str(exc) or repr(exc),
             )
             continue
         result = _parse(raw)

@@ -74,8 +74,8 @@ async def ingest(request: IngestRequest) -> IngestResponse:
                 except Exception:
                     pass
             logger.error(
-                "event=worker_error request_id=%s error_type=%s status=%s body=%r error=%s",
-                request_id, type(exc).__name__, status, body, exc,
+                "event=worker_error request_id=%s error_type=%s status=%s body=%r error=%r",
+                request_id, type(exc).__name__, status, body, str(exc) or repr(exc),
             )
             response_text = _WORKER_FAILURE_RESPONSE
             classifier_result = classifier_result.model_copy(
