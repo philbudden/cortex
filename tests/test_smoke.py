@@ -1,4 +1,4 @@
-"""Smoke and unit tests for the Ingress API (Phase 1–4 / v0.2.0).
+"""Smoke and unit tests for CortX v0.3.0.
 
 Tests run against the FastAPI TestClient — no Docker, no Ollama required.
 Ollama calls are mocked via unittest.mock.
@@ -11,10 +11,11 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from app.main import app
-from app.models import ClassifierResponse
-from app.router import route
+from cortx.interfaces.classifier import ClassificationResult
+from distributions.cortx_local.main import app
+from modules.router_simple.router import RouterSimple, ROUTES
 
+_router = RouterSimple()
 client = TestClient(app)
 
 # ---------------------------------------------------------------------------
@@ -23,39 +24,43 @@ client = TestClient(app)
 
 
 def test_router_execution_maps_to_worker():
-    assert route("execution") == "worker"
+    assert _router.route("execution") == "worker"
 
 
 def test_router_planning_maps_to_worker():
-    assert route("planning") == "worker"
+    assert _router.route("planning") == "worker"
 
 
 def test_router_analysis_maps_to_worker():
-    assert route("analysis") == "worker"
+    assert _router.route("analysis") == "worker"
 
 
 def test_router_ambiguous_maps_to_clarify():
-    assert route("ambiguous") == "clarify"
+    assert _router.route("ambiguous") == "clarify"
 
 
 def test_router_unknown_intent_maps_to_clarify():
-    assert route("totally_unknown") == "clarify"
+    assert _router.route("totally_unknown") == "clarify"
 
 
 # ---------------------------------------------------------------------------
-# Classifier schema validation (no network)
+# Classifier internal validation model (no network)
 # ---------------------------------------------------------------------------
 
 
 def test_classifier_response_valid():
-    cr = ClassifierResponse(intent="execution", confidence=0.9)
+    from modules.classifier_basic.classifier import _ClassifierResponse
+
+    cr = _ClassifierResponse(intent="execution", confidence=0.9)
     assert cr.intent == "execution"
     assert cr.confidence == 0.9
 
 
 def test_classifier_response_rejects_invalid_intent():
+    from modules.classifier_basic.classifier import _ClassifierResponse
+
     with pytest.raises(ValidationError):
-        ClassifierResponse(intent="nonsense", confidence=0.5)
+        _ClassifierResponse(intent="nonsense", confidence=0.5)
 
 
 # ---------------------------------------------------------------------------
@@ -66,11 +71,14 @@ def test_classifier_response_rejects_invalid_intent():
 @pytest.mark.anyio
 async def test_classifier_falls_back_on_network_error():
     """Ollama unreachable on both attempts → intent=ambiguous, confidence=0.0."""
-    import httpx
-    from app.classifier import classify
+    from modules.classifier_basic.classifier import ClassifierBasic
 
-    with patch("app.classifier._call_ollama", side_effect=httpx.ConnectError("refused")):
-        result = await classify("Compare quantum and classical computing")
+    classifier = ClassifierBasic()
+    with patch(
+        "modules.classifier_basic.classifier._call_ollama",
+        side_effect=httpx.ConnectError("refused"),
+    ):
+        result = await classifier.classify("Compare quantum and classical computing")
 
     assert result.intent == "ambiguous"
     assert result.confidence == 0.0
@@ -79,10 +87,14 @@ async def test_classifier_falls_back_on_network_error():
 @pytest.mark.anyio
 async def test_classifier_falls_back_on_invalid_json():
     """Ollama returns non-JSON on both attempts → intent=ambiguous, confidence=0.0."""
-    from app.classifier import classify
+    from modules.classifier_basic.classifier import ClassifierBasic
 
-    with patch("app.classifier._call_ollama", return_value="not json at all"):
-        result = await classify("Compare quantum and classical computing")
+    classifier = ClassifierBasic()
+    with patch(
+        "modules.classifier_basic.classifier._call_ollama",
+        return_value="not json at all",
+    ):
+        result = await classifier.classify("Compare quantum and classical computing")
 
     assert result.intent == "ambiguous"
     assert result.confidence == 0.0
@@ -91,7 +103,7 @@ async def test_classifier_falls_back_on_invalid_json():
 @pytest.mark.anyio
 async def test_classifier_parses_markdown_fenced_json():
     """_parse strips markdown code fences before parsing."""
-    from app.classifier import _parse
+    from modules.classifier_basic.classifier import _parse
 
     fenced = "```json\n{\"intent\": \"execution\", \"confidence\": 0.9}\n```"
     result = _parse(fenced)
@@ -102,7 +114,7 @@ async def test_classifier_parses_markdown_fenced_json():
 @pytest.mark.anyio
 async def test_classifier_normalises_alias_intent():
     """_parse maps a known alias (e.g. 'creative_writing') to a valid intent."""
-    from app.classifier import _parse
+    from modules.classifier_basic.classifier import _parse
 
     result = _parse('{"intent": "creative_writing", "confidence": 0.8}')
     assert result is not None
@@ -112,7 +124,7 @@ async def test_classifier_normalises_alias_intent():
 @pytest.mark.anyio
 async def test_classifier_normalises_alternative_field_name():
     """_parse accepts 'category' as an alternative to 'intent'."""
-    from app.classifier import _parse
+    from modules.classifier_basic.classifier import _parse
 
     result = _parse('{"category": "execution", "confidence": 0.7}')
     assert result is not None
@@ -122,7 +134,7 @@ async def test_classifier_normalises_alternative_field_name():
 @pytest.mark.anyio
 async def test_classifier_normalises_capitalised_intent():
     """_parse lowercases the intent value before matching."""
-    from app.classifier import _parse
+    from modules.classifier_basic.classifier import _parse
 
     result = _parse('{"intent": "Execution", "confidence": 0.85}')
     assert result is not None
@@ -136,7 +148,7 @@ async def test_classifier_normalises_capitalised_intent():
 
 @pytest.fixture
 def mock_classify_execution():
-    return AsyncMock(return_value=ClassifierResponse(intent="execution", confidence=0.95))
+    return AsyncMock(return_value=ClassificationResult(intent="execution", confidence=0.95))
 
 
 @pytest.fixture
@@ -147,8 +159,8 @@ def mock_worker_response():
 
 def test_ingest_happy_path(mock_classify_execution, mock_worker_response):
     with (
-        patch("app.main.classify", mock_classify_execution),
-        patch("app.main.generate", mock_worker_response),
+        patch("modules.classifier_basic.classifier.ClassifierBasic.classify", mock_classify_execution),
+        patch("modules.worker_llm.worker.WorkerLLM.generate", mock_worker_response),
     ):
         response = client.post("/ingest", json={"input": "Run a Python script"})
 
@@ -160,8 +172,8 @@ def test_ingest_happy_path(mock_classify_execution, mock_worker_response):
 
 
 def test_ingest_ambiguous_returns_clarification():
-    mock_classify = AsyncMock(return_value=ClassifierResponse(intent="ambiguous", confidence=0.0))
-    with patch("app.main.classify", mock_classify):
+    mock_classify = AsyncMock(return_value=ClassificationResult(intent="ambiguous", confidence=0.0))
+    with patch("modules.classifier_basic.classifier.ClassifierBasic.classify", mock_classify):
         response = client.post("/ingest", json={"input": "???"})
 
     assert response.status_code == 200
@@ -188,8 +200,8 @@ def test_ingest_rejects_whitespace_only_input():
 def test_ingest_curly_braces_in_input_do_not_crash(mock_classify_execution, mock_worker_response):
     """User input containing Python format placeholders must not raise KeyError."""
     with (
-        patch("app.main.classify", mock_classify_execution),
-        patch("app.main.generate", mock_worker_response),
+        patch("modules.classifier_basic.classifier.ClassifierBasic.classify", mock_classify_execution),
+        patch("modules.worker_llm.worker.WorkerLLM.generate", mock_worker_response),
     ):
         response = client.post("/ingest", json={"input": "what does {foo} mean in {bar}?"})
     assert response.status_code == 200
@@ -206,8 +218,8 @@ def test_chat_completions_returns_200(mock_classify_execution, mock_worker_respo
         "messages": [{"role": "user", "content": "hello"}],
     }
     with (
-        patch("app.main.classify", mock_classify_execution),
-        patch("app.main.generate", mock_worker_response),
+        patch("modules.classifier_basic.classifier.ClassifierBasic.classify", mock_classify_execution),
+        patch("modules.worker_llm.worker.WorkerLLM.generate", mock_worker_response),
     ):
         response = client.post("/v1/chat/completions", json=payload)
 
@@ -264,10 +276,9 @@ def test_list_models_returns_agentic():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.anyio
-async def test_worker_uses_execution_prompt():
+def test_worker_uses_execution_prompt():
     """execution prompt enforces conciseness."""
-    from app.worker import _PROMPTS
+    from modules.worker_llm.worker import _PROMPTS
 
     prompt = _PROMPTS["execution"].lower()
     assert "concise" in prompt or "150 words" in prompt
@@ -276,7 +287,7 @@ async def test_worker_uses_execution_prompt():
 @pytest.mark.anyio
 async def test_worker_uses_planning_prompt():
     """planning prompt requests numbered steps."""
-    from app.worker import _PROMPTS
+    from modules.worker_llm.worker import _PROMPTS
 
     prompt = _PROMPTS["planning"].lower()
     assert "numbered" in prompt or "step" in prompt
@@ -285,7 +296,7 @@ async def test_worker_uses_planning_prompt():
 @pytest.mark.anyio
 async def test_worker_uses_analysis_prompt():
     """analysis prompt requests focused analytical response."""
-    from app.worker import _PROMPTS
+    from modules.worker_llm.worker import _PROMPTS
 
     prompt = _PROMPTS["analysis"].lower()
     assert "analytical" in prompt or "insight" in prompt or "focused" in prompt
@@ -294,7 +305,7 @@ async def test_worker_uses_analysis_prompt():
 @pytest.mark.anyio
 async def test_worker_unknown_intent_uses_fallback():
     """generate() falls back gracefully for unrecognised intent."""
-    from app.worker import _FALLBACK_PROMPT, _PROMPTS
+    from modules.worker_llm.worker import _FALLBACK_PROMPT, _PROMPTS
 
     assert _FALLBACK_PROMPT == _PROMPTS["execution"]
 
@@ -306,11 +317,11 @@ async def test_worker_unknown_intent_uses_fallback():
 
 def test_ingest_worker_failure_returns_graceful_response():
     """If Ollama is unavailable during the worker call, return 200 with failure envelope."""
-    mock_classify = AsyncMock(return_value=ClassifierResponse(intent="execution", confidence=0.9))
+    mock_classify = AsyncMock(return_value=ClassificationResult(intent="execution", confidence=0.9))
     with (
-        patch("app.main.classify", mock_classify),
+        patch("modules.classifier_basic.classifier.ClassifierBasic.classify", mock_classify),
         patch(
-            "app.main.generate",
+            "modules.worker_llm.worker.WorkerLLM.generate",
             side_effect=httpx.ConnectError("refused"),
         ),
     ):
@@ -325,11 +336,11 @@ def test_ingest_worker_failure_returns_graceful_response():
 
 def test_ingest_worker_timeout_returns_graceful_response():
     """Worker timeout returns 200 with failure envelope rather than 500."""
-    mock_classify = AsyncMock(return_value=ClassifierResponse(intent="execution", confidence=0.9))
+    mock_classify = AsyncMock(return_value=ClassificationResult(intent="execution", confidence=0.9))
     with (
-        patch("app.main.classify", mock_classify),
+        patch("modules.classifier_basic.classifier.ClassifierBasic.classify", mock_classify),
         patch(
-            "app.main.generate",
+            "modules.worker_llm.worker.WorkerLLM.generate",
             side_effect=httpx.TimeoutException("timed out"),
         ),
     ):
@@ -360,10 +371,10 @@ def test_debug_routes_returns_routing_table():
 
 
 def test_ingest_response_contains_expected_fields(mock_classify_execution, mock_worker_response):
-    """Response schema is intact after Phase 3 wiring changes."""
+    """Response schema is intact after v0.3.0 refactor."""
     with (
-        patch("app.main.classify", mock_classify_execution),
-        patch("app.main.generate", mock_worker_response),
+        patch("modules.classifier_basic.classifier.ClassifierBasic.classify", mock_classify_execution),
+        patch("modules.worker_llm.worker.WorkerLLM.generate", mock_worker_response),
     ):
         response = client.post("/ingest", json={"input": "Write a poem"})
     assert response.status_code == 200
@@ -377,10 +388,9 @@ def test_router_unknown_intent_logs_fallback(caplog):
     """route() emits a router_fallback warning for unrecognised intents."""
     import logging
 
-    from app.router import route
-
-    with caplog.at_level(logging.WARNING, logger="app.router"):
-        handler = route("totally_unknown", request_id="test-123")
+    router = RouterSimple()
+    with caplog.at_level(logging.WARNING, logger="modules.router_simple.router"):
+        handler = router.route("totally_unknown", request_id="test-123")
 
     assert handler == "clarify"
     assert any("router_fallback" in r.message for r in caplog.records)
@@ -391,10 +401,9 @@ def test_router_known_intent_logs_intent_router(caplog):
     """route() emits an intent_router info log for every routing decision."""
     import logging
 
-    from app.router import route
-
-    with caplog.at_level(logging.INFO, logger="app.router"):
-        handler = route("execution", request_id="test-456", confidence=0.95)
+    router = RouterSimple()
+    with caplog.at_level(logging.INFO, logger="modules.router_simple.router"):
+        handler = router.route("execution", request_id="test-456", confidence=0.95)
 
     assert handler == "worker"
     assert any("intent_router" in r.message for r in caplog.records)
@@ -405,10 +414,11 @@ async def test_classifier_result_logged_for_prefix_match(caplog):
     """classify() emits classifier_result log even when prefix check short-circuits."""
     import logging
 
-    from app.classifier import classify
+    from modules.classifier_basic.classifier import ClassifierBasic
 
-    with caplog.at_level(logging.INFO, logger="app.classifier"):
-        await classify("Write a haiku", request_id="test-789")
+    classifier = ClassifierBasic()
+    with caplog.at_level(logging.INFO, logger="modules.classifier_basic.classifier"):
+        await classifier.classify("Write a haiku", request_id="test-789")
 
     assert any("classifier_result" in r.message for r in caplog.records)
     assert any("prefix_match" in r.message for r in caplog.records)
@@ -421,7 +431,7 @@ async def test_classifier_result_logged_for_prefix_match(caplog):
 
 def test_tool_registry_register_and_get():
     """Registered tool is retrievable by name."""
-    from core.tools import ToolRegistry
+    from cortx.registry.tool_registry import ToolRegistry
 
     registry = ToolRegistry()
     registry.register(
@@ -436,7 +446,7 @@ def test_tool_registry_register_and_get():
 
 def test_tool_registry_duplicate_raises():
     """Registering the same name twice raises ValueError."""
-    from core.tools import ToolRegistry
+    from cortx.registry.tool_registry import ToolRegistry
 
     registry = ToolRegistry()
     registry.register("dup", "desc", {}, lambda: None)
@@ -447,7 +457,7 @@ def test_tool_registry_duplicate_raises():
 
 def test_tool_registry_unknown_tool_raises():
     """Getting an unregistered tool raises ValueError."""
-    from core.tools import ToolRegistry
+    from cortx.registry.tool_registry import ToolRegistry
 
     registry = ToolRegistry()
 
@@ -457,7 +467,7 @@ def test_tool_registry_unknown_tool_raises():
 
 def test_tool_registry_list():
     """list() returns the names of all registered tools."""
-    from core.tools import ToolRegistry
+    from cortx.registry.tool_registry import ToolRegistry
 
     registry = ToolRegistry()
     registry.register("a", "d", {}, lambda: None)
@@ -468,7 +478,7 @@ def test_tool_registry_list():
 
 def test_tool_execute_calls_function():
     """Tool.execute() calls the underlying function with the provided args."""
-    from core.tools import Tool
+    from cortx.registry.tool_registry import Tool
 
     def add(x: int, y: int) -> int:
         return x + y
@@ -485,7 +495,7 @@ def test_tool_execute_calls_function():
 
 def test_agent_action_from_dict_respond():
     """from_dict correctly parses a respond action."""
-    from core.tools import AgentAction
+    from cortx.runtime.executor import AgentAction
 
     action = AgentAction.from_dict({"action": "respond", "content": "Hello"})
     assert action.action == "respond"
@@ -495,7 +505,7 @@ def test_agent_action_from_dict_respond():
 
 def test_agent_action_from_dict_tool():
     """from_dict correctly parses a tool action."""
-    from core.tools import AgentAction
+    from cortx.runtime.executor import AgentAction
 
     action = AgentAction.from_dict(
         {"action": "tool", "tool": "read_file", "args": {"path": "/tmp/x"}}
@@ -507,7 +517,7 @@ def test_agent_action_from_dict_tool():
 
 def test_agent_action_args_defaults_to_empty_dict():
     """args defaults to {} when absent from the dict."""
-    from core.tools import AgentAction
+    from cortx.runtime.executor import AgentAction
 
     action = AgentAction.from_dict({"action": "respond", "content": "hi"})
     assert action.args == {}
@@ -520,7 +530,8 @@ def test_agent_action_args_defaults_to_empty_dict():
 
 def test_executor_respond_action_returns_content():
     """executor.execute() with action='respond' returns content directly."""
-    from core.tools import AgentAction, ToolExecutor, ToolRegistry
+    from cortx.registry.tool_registry import ToolRegistry
+    from cortx.runtime.executor import AgentAction, ToolExecutor
 
     executor = ToolExecutor(ToolRegistry())
     action = AgentAction(action="respond", content="Direct reply")
@@ -529,7 +540,8 @@ def test_executor_respond_action_returns_content():
 
 def test_executor_tool_action_executes_tool():
     """executor.execute() with action='tool' calls the registered tool."""
-    from core.tools import AgentAction, ToolExecutor, ToolRegistry
+    from cortx.registry.tool_registry import ToolRegistry
+    from cortx.runtime.executor import AgentAction, ToolExecutor
 
     registry = ToolRegistry()
     registry.register("upper", "uppercase text", {"text": "string"}, lambda text: text.upper())
@@ -540,7 +552,8 @@ def test_executor_tool_action_executes_tool():
 
 def test_executor_unknown_action_raises():
     """executor.execute() raises ValueError for an unrecognised action type."""
-    from core.tools import AgentAction, ToolExecutor, ToolRegistry
+    from cortx.registry.tool_registry import ToolRegistry
+    from cortx.runtime.executor import AgentAction, ToolExecutor
 
     executor = ToolExecutor(ToolRegistry())
     action = AgentAction(action="fly")
@@ -551,7 +564,8 @@ def test_executor_unknown_action_raises():
 
 def test_executor_unknown_tool_raises():
     """executor.execute() raises ValueError when the requested tool is not registered."""
-    from core.tools import AgentAction, ToolExecutor, ToolRegistry
+    from cortx.registry.tool_registry import ToolRegistry
+    from cortx.runtime.executor import AgentAction, ToolExecutor
 
     executor = ToolExecutor(ToolRegistry())
     action = AgentAction(action="tool", tool="ghost", args={})
@@ -567,7 +581,7 @@ def test_executor_unknown_tool_raises():
 
 def test_parse_agent_output_valid_respond():
     """parse_agent_output correctly parses a respond envelope."""
-    from core.tools import parse_agent_output
+    from cortx.runtime.executor import parse_agent_output
 
     action = parse_agent_output('{"action": "respond", "content": "hi"}')
     assert action.action == "respond"
@@ -576,7 +590,7 @@ def test_parse_agent_output_valid_respond():
 
 def test_parse_agent_output_valid_tool():
     """parse_agent_output correctly parses a tool envelope."""
-    from core.tools import parse_agent_output
+    from cortx.runtime.executor import parse_agent_output
 
     action = parse_agent_output(
         '{"action": "tool", "tool": "read_file", "args": {"path": "/tmp/f"}}'
@@ -589,7 +603,7 @@ def test_parse_agent_output_invalid_json_raises():
     """parse_agent_output raises on non-JSON input."""
     import json
 
-    from core.tools import parse_agent_output
+    from cortx.runtime.executor import parse_agent_output
 
     with pytest.raises(json.JSONDecodeError):
         parse_agent_output("this is plain text")
@@ -602,7 +616,7 @@ def test_parse_agent_output_invalid_json_raises():
 
 def test_filesystem_read_file_returns_content(tmp_path):
     """read_file returns the text content of an existing file."""
-    from tools.filesystem import read_file
+    from modules.tools_filesystem.filesystem import read_file
 
     f = tmp_path / "sample.txt"
     f.write_text("hello world")
@@ -611,7 +625,7 @@ def test_filesystem_read_file_returns_content(tmp_path):
 
 def test_filesystem_read_file_missing_returns_error_string():
     """read_file returns an error string when the file does not exist."""
-    from tools.filesystem import read_file
+    from modules.tools_filesystem.filesystem import read_file
 
     result = read_file("/nonexistent/path/file.txt")
     assert "File not found" in result
@@ -623,8 +637,8 @@ def test_filesystem_read_file_missing_returns_error_string():
 
 
 def test_bootstrap_tools_registers_read_file():
-    """bootstrap_tools.py registers the read_file tool at module load."""
-    from bootstrap_tools import tool_registry
+    """bootstrap registers the read_file tool at module load."""
+    from distributions.cortx_local.bootstrap import tool_registry
 
     assert "read_file" in tool_registry.list()
 
@@ -636,7 +650,7 @@ def test_bootstrap_tools_registers_read_file():
 
 def test_worker_execution_prompt_includes_json_instruction():
     """execution prompt now includes JSON format instruction."""
-    from app.worker import _PROMPTS
+    from modules.worker_llm.worker import _PROMPTS
 
     prompt = _PROMPTS["execution"]
     assert '"action"' in prompt
@@ -645,14 +659,14 @@ def test_worker_execution_prompt_includes_json_instruction():
 
 def test_worker_planning_prompt_includes_json_instruction():
     """planning prompt includes JSON format instruction."""
-    from app.worker import _PROMPTS
+    from modules.worker_llm.worker import _PROMPTS
 
     assert '"action"' in _PROMPTS["planning"]
 
 
 def test_worker_analysis_prompt_includes_json_instruction():
     """analysis prompt includes JSON format instruction."""
-    from app.worker import _PROMPTS
+    from modules.worker_llm.worker import _PROMPTS
 
     assert '"action"' in _PROMPTS["analysis"]
 
@@ -666,8 +680,8 @@ def test_ingest_with_json_respond_action(mock_classify_execution):
     """generate() returning a JSON respond envelope is correctly unwrapped."""
     json_output = '{"action": "respond", "content": "The answer is 42."}'
     with (
-        patch("app.main.classify", mock_classify_execution),
-        patch("app.main.generate", AsyncMock(return_value=json_output)),
+        patch("modules.classifier_basic.classifier.ClassifierBasic.classify", mock_classify_execution),
+        patch("modules.worker_llm.worker.WorkerLLM.generate", AsyncMock(return_value=json_output)),
     ):
         response = client.post("/ingest", json={"input": "What is the answer?"})
 
@@ -683,8 +697,8 @@ def test_ingest_with_tool_call_read_file(mock_classify_execution, tmp_path):
         '{"action": "tool", "tool": "read_file", "args": {"path": "' + str(test_file) + '"}}'
     )
     with (
-        patch("app.main.classify", mock_classify_execution),
-        patch("app.main.generate", AsyncMock(return_value=json_output)),
+        patch("modules.classifier_basic.classifier.ClassifierBasic.classify", mock_classify_execution),
+        patch("modules.worker_llm.worker.WorkerLLM.generate", AsyncMock(return_value=json_output)),
     ):
         response = client.post("/ingest", json={"input": "Read my notes"})
 
@@ -695,8 +709,8 @@ def test_ingest_with_tool_call_read_file(mock_classify_execution, tmp_path):
 def test_ingest_plain_text_fallback(mock_classify_execution):
     """generate() returning plain text (non-JSON) is returned as-is."""
     with (
-        patch("app.main.classify", mock_classify_execution),
-        patch("app.main.generate", AsyncMock(return_value="Just some plain text")),
+        patch("modules.classifier_basic.classifier.ClassifierBasic.classify", mock_classify_execution),
+        patch("modules.worker_llm.worker.WorkerLLM.generate", AsyncMock(return_value="Just some plain text")),
     ):
         response = client.post("/ingest", json={"input": "Tell me something"})
 
@@ -708,8 +722,8 @@ def test_ingest_unknown_tool_returns_failure_response(mock_classify_execution):
     """Requesting an unregistered tool results in the worker failure response."""
     json_output = '{"action": "tool", "tool": "nonexistent_tool", "args": {}}'
     with (
-        patch("app.main.classify", mock_classify_execution),
-        patch("app.main.generate", AsyncMock(return_value=json_output)),
+        patch("modules.classifier_basic.classifier.ClassifierBasic.classify", mock_classify_execution),
+        patch("modules.worker_llm.worker.WorkerLLM.generate", AsyncMock(return_value=json_output)),
     ):
         response = client.post("/ingest", json={"input": "Do something"})
 
@@ -722,10 +736,10 @@ def test_ingest_agent_selected_event_logged(caplog, mock_classify_execution, moc
     """event=agent_selected is emitted when the worker is invoked."""
     import logging
 
-    with caplog.at_level(logging.INFO, logger="app.main"):
+    with caplog.at_level(logging.INFO, logger="cortx.runtime.pipeline"):
         with (
-            patch("app.main.classify", mock_classify_execution),
-            patch("app.main.generate", mock_worker_response),
+            patch("modules.classifier_basic.classifier.ClassifierBasic.classify", mock_classify_execution),
+            patch("modules.worker_llm.worker.WorkerLLM.generate", mock_worker_response),
         ):
             client.post("/ingest", json={"input": "Run a task"})
 
@@ -733,19 +747,14 @@ def test_ingest_agent_selected_event_logged(caplog, mock_classify_execution, moc
 
 
 def test_ingest_unexpected_tool_exception_returns_200_failure(mock_classify_execution):
-    """A tool function raising an unexpected exception must NOT produce a 500.
-
-    Verifies bug-1 fix: any exception from the tool execution layer is caught
-    and collapsed into the worker failure response (graceful failure contract).
-    """
-    from bootstrap_tools import tool_registry
-    from core.tools import ToolExecutor
+    """A tool function raising an unexpected exception must NOT produce a 500."""
+    from cortx.registry.tool_registry import Tool
+    from distributions.cortx_local.bootstrap import tool_registry
 
     def _exploding_tool(**kwargs):
         raise RuntimeError("disk on fire")
 
-    # Temporarily register a tool whose function always raises.
-    tool_registry._tools["exploding_tool"] = __import__("core.tools", fromlist=["Tool"]).Tool(
+    tool_registry._tools["exploding_tool"] = Tool(
         name="exploding_tool",
         description="always raises",
         input_schema={},
@@ -754,8 +763,8 @@ def test_ingest_unexpected_tool_exception_returns_200_failure(mock_classify_exec
     try:
         json_output = '{"action": "tool", "tool": "exploding_tool", "args": {}}'
         with (
-            patch("app.main.classify", mock_classify_execution),
-            patch("app.main.generate", AsyncMock(return_value=json_output)),
+            patch("modules.classifier_basic.classifier.ClassifierBasic.classify", mock_classify_execution),
+            patch("modules.worker_llm.worker.WorkerLLM.generate", AsyncMock(return_value=json_output)),
         ):
             response = client.post("/ingest", json={"input": "blow up"})
 
@@ -767,15 +776,11 @@ def test_ingest_unexpected_tool_exception_returns_200_failure(mock_classify_exec
 
 
 def test_ingest_tool_action_missing_tool_name_returns_failure(mock_classify_execution):
-    """action='tool' with no 'tool' key must return a graceful failure response.
-
-    Verifies type-1 fix: null guard in ToolExecutor emits a clear error and
-    the pipeline collapses to the worker failure response rather than a 500.
-    """
+    """action='tool' with no 'tool' key must return a graceful failure response."""
     json_output = '{"action": "tool", "args": {}}'
     with (
-        patch("app.main.classify", mock_classify_execution),
-        patch("app.main.generate", AsyncMock(return_value=json_output)),
+        patch("modules.classifier_basic.classifier.ClassifierBasic.classify", mock_classify_execution),
+        patch("modules.worker_llm.worker.WorkerLLM.generate", AsyncMock(return_value=json_output)),
     ):
         response = client.post("/ingest", json={"input": "call unnamed tool"})
 
@@ -785,11 +790,7 @@ def test_ingest_tool_action_missing_tool_name_returns_failure(mock_classify_exec
 
 
 def test_ingest_tool_execution_logs_carry_request_id(caplog, mock_classify_execution, tmp_path):
-    """Tool execution log events must include the originating request_id.
-
-    Verifies obs-1 fix: request_id is threaded through ToolExecutor and Tool
-    so that tool_execute events can be correlated to their request.
-    """
+    """Tool execution log events must include the originating request_id."""
     import logging
 
     test_file = tmp_path / "data.txt"
@@ -798,10 +799,10 @@ def test_ingest_tool_execution_logs_carry_request_id(caplog, mock_classify_execu
         '{"action": "tool", "tool": "read_file", "args": {"path": "' + str(test_file) + '"}}'
     )
 
-    with caplog.at_level(logging.INFO, logger="core.tools"):
+    with caplog.at_level(logging.INFO):
         with (
-            patch("app.main.classify", mock_classify_execution),
-            patch("app.main.generate", AsyncMock(return_value=json_output)),
+            patch("modules.classifier_basic.classifier.ClassifierBasic.classify", mock_classify_execution),
+            patch("modules.worker_llm.worker.WorkerLLM.generate", AsyncMock(return_value=json_output)),
         ):
             response = client.post("/ingest", json={"input": "Read data"})
 
