@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="CortX — cortx distribution")
 
-_pipeline_def: PipelineDefinition = pipeline_registry.get("default")  # type: ignore[assignment]
+_pipeline_def: PipelineDefinition = pipeline_registry.get("default")
 pipeline = PipelineRunner(module_registry=module_registry, tool_registry=tool_registry, pipeline=_pipeline_def)
 
 

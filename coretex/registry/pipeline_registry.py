@@ -24,9 +24,9 @@ class PipelineRegistry:
     """
 
     def __init__(self) -> None:
-        self._pipelines: Dict[str, object] = {}
+        self._pipelines: Dict[str, "PipelineDefinition"] = {}
 
-    def register(self, name: str, pipeline: object) -> None:
+    def register(self, name: str, pipeline: "PipelineDefinition") -> None:
         """Register *pipeline* under *name*.
 
         Raises:
@@ -37,7 +37,7 @@ class PipelineRegistry:
         self._pipelines[name] = pipeline
         logger.info("event=pipeline_registered name=%s", name)
 
-    def get(self, name: str) -> object:
+    def get(self, name: str) -> "PipelineDefinition":
         """Return the pipeline registered as *name*.
 
         Raises:

@@ -21,7 +21,7 @@ import json
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import List, Literal, Optional, Tuple
 
 import httpx
 
@@ -52,7 +52,7 @@ class PipelineStep:
             ModuleRegistry (not used for ``'tool_executor'``).
     """
 
-    component_type: str
+    component_type: Literal["classifier", "router", "worker", "tool_executor"]
     name: str
 
     def __post_init__(self) -> None:
@@ -98,6 +98,7 @@ def make_default_pipeline() -> PipelineDefinition:
             PipelineStep(component_type="tool_executor", name="tool_executor"),
         ],
     )
+
 
 CLARIFY_RESPONSE = (
     "I'm not sure what you're asking. Could you provide more detail or clarify your request?"
@@ -151,12 +152,12 @@ class PipelineRunner:
 
         Returns a tuple of ``(response_text, intent, confidence)``.
         """
+        logger.info("event=request_received request_id=%s", context.request_id)
         logger.info(
             "event=pipeline_selected request_id=%s pipeline=%s",
             context.request_id,
             self._pipeline.name,
         )
-        logger.info("event=request_received request_id=%s", context.request_id)
         t_start = context.t_start
 
         # ------------------------------------------------------------------
